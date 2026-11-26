@@ -3,6 +3,7 @@
 namespace App\Pedidos;
 
 use App\Catalogo\Articulo;
+use App\Clientes\Cliente;
 use Illuminate\Contracts\Session\Session;
 
 /**
@@ -13,7 +14,28 @@ class Carrito
 {
     private const KEY = 'carrito.items';
 
+    private const CLIENTE = 'carrito.cliente';
+
     public function __construct(private Session $session) {}
+
+    /** Cliente elegido para este pedido (copia tomada de SQL Server al seleccionarlo). */
+    public function cliente(): ?Cliente
+    {
+        $data = $this->session->get(self::CLIENTE);
+
+        return $data ? Cliente::fromArray($data) : null;
+    }
+
+    public function fijarCliente(Cliente $cliente): void
+    {
+        $this->session->put(self::CLIENTE, $cliente->toArray());
+    }
+
+    /** Pedido terminado: quita artículos y cliente para empezar otro. */
+    public function terminar(): void
+    {
+        $this->session->forget([self::KEY, self::CLIENTE]);
+    }
 
     /** @return array<string, array{codigo:string,descripcion:string,unidad:string,precio:float,existencia:float,cantidad:float}> */
     public function items(): array

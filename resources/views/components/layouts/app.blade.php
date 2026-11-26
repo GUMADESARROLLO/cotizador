@@ -24,7 +24,7 @@
                 @isset($leading)
                     {{ $leading }}
                 @else
-                    <a href="{{ route('articulos.index') }}" class="shrink-0" aria-label="Inicio">
+                    <a href="/" class="shrink-0" aria-label="Inicio">
                         <img src="/logo-unimark-20.webp" alt="Unimark, 20 años. Supliendo salud" width="1200" height="364" class="h-10 w-auto" decoding="async">
                     </a>
                 @endisset
@@ -72,10 +72,11 @@
     {{-- Barra de pestañas: material blanco translúcido --}}
     <nav class="material-bar no-print border-line fixed inset-x-0 bottom-0 z-30 border-t"
          style="padding-bottom: env(safe-area-inset-bottom)" aria-label="Secciones">
-        <div class="mx-auto grid h-[56px] max-w-md grid-cols-3">
+        <div class="mx-auto grid h-[56px] max-w-lg grid-cols-4">
             @php
                 $tabs = [
-                    ['buscar', route('articulos.index'), 'Buscar', 'M10.5 3a7.5 7.5 0 0 1 5.96 12.05l4.25 4.24a1 1 0 0 1-1.42 1.42l-4.24-4.25A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'],
+                    ['cliente', route('clientes.index'), 'Cliente', 'M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 10c4.42 0 8 2.24 8 5v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1c0-2.76 3.58-5 8-5Zm0 2c-3.47 0-6 1.65-6 3v1h12v-1c0-1.35-2.53-3-6-3Z'],
+                    ['articulos', route('articulos.index'), 'Artículos','M10.5 3a7.5 7.5 0 0 1 5.96 12.05l4.25 4.24a1 1 0 0 1-1.42 1.42l-4.24-4.25A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z'],
                     ['pedido', route('carrito.index'), 'Pedido', 'M7 7V6a5 5 0 0 1 10 0v1h2.1a1 1 0 0 1 1 .92l1 12A2 2 0 0 1 19.1 22H4.9a2 2 0 0 1-2-2.08l1-12A1 1 0 0 1 4.9 7H7Zm2 0h6V6a3 3 0 0 0-6 0v1Zm-3.2 2-.9 11h14.2l-.9-11H17v1a1 1 0 1 1-2 0V9H9v1a1 1 0 1 1-2 0V9H5.8Z'],
                     ['historial', route('pedidos.index'), 'Historial', 'M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20Zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm0 2a1 1 0 0 1 1 1v4.59l2.7 2.7a1 1 0 0 1-1.4 1.42l-3-3A1 1 0 0 1 11 12V7a1 1 0 0 1 1-1Z'],
                 ];

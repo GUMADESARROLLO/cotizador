@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['folio', 'cliente', 'contacto', 'notas', 'lineas', 'piezas', 'total'])]
+#[Fillable(['folio', 'cliente_codigo', 'cliente', 'cliente_ruc', 'contacto', 'notas', 'lineas', 'piezas', 'total', 'credito_disponible'])]
 class Pedido extends Model
 {
     protected function casts(): array
@@ -14,6 +14,7 @@ class Pedido extends Model
         return [
             'piezas' => 'float',
             'total' => 'float',
+            'credito_disponible' => 'float',
         ];
     }
 

@@ -288,6 +288,15 @@
         pointer-events: none;
     }
 
+    /* Foto del producto: aparece con un fundido al terminar de cargar */
+    .product-thumb {
+        opacity: 0;
+        transition: opacity 200ms ease;
+    }
+    .product-thumb.is-loaded {
+        opacity: 1;
+    }
+
     .row-leaving {
         opacity: 0;
         transform: translateX(-12px);

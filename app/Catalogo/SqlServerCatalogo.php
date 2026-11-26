@@ -2,9 +2,9 @@
 
 namespace App\Catalogo;
 
+use App\Support\SqlLike;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Support\Str;
 
 /**
  * Lectura del catálogo en SQL Server. Solo SELECT.
@@ -26,6 +26,8 @@ class SqlServerCatalogo implements Catalogo
         private ?string $whereRaw = null,
         private int $limite = 30,
         private ?array $stock = null,
+        /** @var array{table:?string,articulo:string,precio:string,nivel_columna:string,nivel:string,where_raw:?string}|null */
+        private ?array $precio = null,
     ) {}
 
     public function buscar(string $termino, ?int $limite = null): array
@@ -40,8 +42,8 @@ class SqlServerCatalogo implements Catalogo
         $query = $this->base();
 
         // Cada palabra debe aparecer en el código o en la descripción.
-        foreach (preg_split('/\s+/', $termino) as $palabra) {
-            $like = '%'.$this->escaparLike($palabra).'%';
+        foreach (SqlLike::palabras($termino) as $palabra) {
+            $like = SqlLike::contiene($palabra);
             $query->where(function (Builder $q) use ($codigo, $descripcion, $like) {
                 $q->whereRaw("{$codigo} LIKE ? ESCAPE '!'", [$like])
                     ->orWhereRaw("{$descripcion} LIKE ? ESCAPE '!'", [$like]);
@@ -65,7 +67,10 @@ class SqlServerCatalogo implements Catalogo
 
     public function encontrarVarios(array $codigos): array
     {
-        $codigos = array_values(array_unique(array_filter($codigos, 'strlen')));
+        // Siempre como texto: PHP convierte las claves numéricas ("13401062") en int, y
+        // comparar la columna varchar con un int hace que SQL Server convierta TODA la
+        // columna a número y falle con códigos como "10107011-B".
+        $codigos = array_values(array_unique(array_filter(array_map('strval', $codigos), 'strlen')));
         if ($codigos === []) {
             return [];
         }
@@ -86,8 +91,23 @@ class SqlServerCatalogo implements Catalogo
             "a.{$c['codigo']} as codigo",
             "a.{$c['descripcion']} as descripcion",
             "a.{$c['unidad']} as unidad",
-            "a.{$c['precio']} as precio",
         ]);
+
+        if ($this->precio['table'] ?? null) {
+            // Precio del nivel configurado (alias "p"), uno por artículo.
+            $p = $this->precio;
+            $sub = $this->db->table($p['table'])
+                ->select($p['articulo'].' as articulo')
+                ->selectRaw('MAX('.$this->wrap($p['precio']).') as precio')
+                ->where($p['nivel_columna'], $p['nivel'])
+                ->when($p['where_raw'] ?? null, fn (Builder $q, $raw) => $q->whereRaw($raw))
+                ->groupBy($p['articulo']);
+
+            $query->leftJoinSub($sub, 'p', fn ($j) => $j->whereRaw($this->unir('p')))
+                ->addSelect('p.precio as precio');
+        } else {
+            $query->addSelect("a.{$c['precio']} as precio");
+        }
 
         if ($this->stock['table'] ?? null) {
             $s = $this->stock;
@@ -97,12 +117,7 @@ class SqlServerCatalogo implements Catalogo
                 ->when($s['excluir'], fn (Builder $q, $excluir) => $q->whereNotIn($s['bodega'], $excluir))
                 ->groupBy($s['articulo']);
 
-            // COLLATE evita conflictos de intercalación entre bases distintas (p. ej. PRODUCCION vs Softland).
-            $join = $this->db->getDriverName() === 'sqlsrv'
-                ? $this->col('codigo').' = '.$this->wrap('s.articulo').' COLLATE DATABASE_DEFAULT'
-                : $this->col('codigo').' = '.$this->wrap('s.articulo');
-
-            $query->leftJoinSub($sub, 's', fn ($j) => $j->whereRaw($join))
+            $query->leftJoinSub($sub, 's', fn ($j) => $j->whereRaw($this->unir('s')))
                 ->selectRaw('COALESCE('.$this->wrap('s.cantidad').', 0) as existencia');
         } else {
             $query->addSelect("a.{$c['existencia']} as existencia");
@@ -115,6 +130,15 @@ class SqlServerCatalogo implements Catalogo
         return $query;
     }
 
+    /** Condición de unión por código con una subconsulta (alias $alias, columna "articulo"). */
+    private function unir(string $alias): string
+    {
+        $cond = $this->col('codigo').' = '.$this->wrap($alias.'.articulo');
+
+        // COLLATE evita conflictos de intercalación entre bases distintas (PRODUCCION vs Softland).
+        return $this->db->getDriverName() === 'sqlsrv' ? $cond.' COLLATE DATABASE_DEFAULT' : $cond;
+    }
+
     /** Columna de la tabla principal, ya entrecomillada: [a].[COLUMNA] */
     private function col(string $campo): string
     {
@@ -124,15 +148,5 @@ class SqlServerCatalogo implements Catalogo
     private function wrap(string $columna): string
     {
         return $this->db->getQueryGrammar()->wrap($columna);
-    }
-
-    private function escaparLike(string $valor): string
-    {
-        return Str::of($valor)
-            ->replace('!', '!!')
-            ->replace('%', '!%')
-            ->replace('_', '!_')
-            ->replace('[', '![')
-            ->toString();
     }
 }

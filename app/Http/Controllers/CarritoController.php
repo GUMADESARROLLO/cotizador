@@ -13,6 +13,7 @@ class CarritoController extends Controller
         return view('carrito.index', [
             'items' => $carrito->items(),
             'resumen' => $carrito->resumen(),
+            'cliente' => $carrito->cliente(),
         ]);
     }
 

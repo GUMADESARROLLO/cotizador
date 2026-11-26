@@ -75,6 +75,11 @@ function initSearch() {
                 signal: controller.signal,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
+            // Sin cliente elegido (p. ej. sesión vencida): volver al paso 1.
+            if (res.status === 409 && res.headers.get('X-Redirect')) {
+                location.href = res.headers.get('X-Redirect');
+                return;
+            }
             results.innerHTML = await res.text();
         } catch (e) {
             if (e.name !== 'AbortError') toast('No se pudo buscar. Revisa tu conexión.');
@@ -119,6 +124,8 @@ function renderResumen(r) {
     $$('[data-cart-total]').forEach((el) => (el.textContent = money(r.total)));
     const pill = $('[data-cart-pill]');
     if (pill) pill.hidden = !r.lineas;
+    // Aviso (no bloqueante) si el total supera el crédito disponible del cliente.
+    $$('[data-credit-warning]').forEach((el) => (el.hidden = r.total <= Number(el.dataset.disponible)));
 }
 
 /* ---------- Control de cantidad ---------- */
@@ -175,6 +182,10 @@ function sync(st, value) {
                 });
                 const data = await res.json();
                 if (data.resumen) renderResumen(data.resumen);
+                if (res.status === 409) {
+                    location.href = '/clientes';
+                    return;
+                }
                 if (!res.ok) {
                     toast(data.message ?? 'No se pudo actualizar el pedido.');
                     if (res.status === 404) removeRow(codigo);

@@ -106,6 +106,54 @@ class SqlServerCatalogoTest extends TestCase
         $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $catalogo->buscar('tubo')));
     }
 
+    public function test_precio_desde_nivel_vigente_y_oculta_sin_precio(): void
+    {
+        Schema::create('precios', function ($t) {
+            $t->string('ARTICULO');
+            $t->string('NIVEL_PRECIO');
+            $t->decimal('PRECIO', 10, 2);
+            $t->string('VIGENCIA');
+        });
+        DB::table('precios')->insert([
+            ['ARTICULO' => 'A-100', 'NIVEL_PRECIO' => 'INST.PUB. C$', 'PRECIO' => 1, 'VIGENCIA' => 'S'],
+            ['ARTICULO' => 'A-100', 'NIVEL_PRECIO' => 'FARMACIA', 'PRECIO' => 250, 'VIGENCIA' => 'S'],
+            ['ARTICULO' => 'A-101', 'NIVEL_PRECIO' => 'INST.PUB. C$', 'PRECIO' => 15.5, 'VIGENCIA' => 'S'],
+            ['ARTICULO' => 'A-101', 'NIVEL_PRECIO' => 'INST.PUB. C$', 'PRECIO' => 99, 'VIGENCIA' => 'N'], // vencido
+            // A-102 no tiene precio en el nivel: no se muestra
+        ]);
+
+        $catalogo = new SqlServerCatalogo(
+            db: DB::connection(),
+            tabla: 'inv_art',
+            columnas: ['codigo' => 'CVE_ART', 'descripcion' => 'DESCR', 'unidad' => 'UNI_MED', 'precio' => 'PRECIO1', 'existencia' => 'EXIST'],
+            whereRaw: 'a.ACTIVO = 1 and p.precio > 0',
+            precio: ['table' => 'precios', 'articulo' => 'ARTICULO', 'precio' => 'PRECIO', 'nivel_columna' => 'NIVEL_PRECIO', 'nivel' => 'INST.PUB. C$', 'where_raw' => "VIGENCIA = 'S'"],
+        );
+
+        $res = $catalogo->encontrarVarios(['A-100', 'A-101', 'A-102']);
+
+        $this->assertSame(1.0, $res['A-100']->precio); // tal cual, aunque sea C$1
+        $this->assertSame(15.5, $res['A-101']->precio); // ignora el precio no vigente
+        $this->assertArrayNotHasKey('A-102', $res);
+        $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $catalogo->buscar('tubo')));
+    }
+
+    public function test_codigos_numericos_se_envian_como_texto(): void
+    {
+        // Las claves del carrito como "13401062" llegan como int desde array_keys().
+        DB::table('inv_art')->insert(['CVE_ART' => '13401062', 'DESCR' => 'Numérico', 'UNI_MED' => 'CJA', 'PRECIO1' => 5, 'EXIST' => 3, 'ACTIVO' => true]);
+        $claves = array_keys(['13401062' => 1, 'A-100' => 1]);
+        $this->assertIsInt($claves[0]);
+
+        DB::enableQueryLog();
+        $res = $this->catalogo->encontrarVarios($claves);
+        $bindings = DB::getQueryLog()[0]['bindings'];
+
+        $this->assertEqualsCanonicalizing(['13401062', 'A-100'], array_map('strval', array_keys($res)));
+        $this->assertContains('13401062', $bindings, 'el código debe enlazarse como string');
+        $this->assertNotContains(13401062, $bindings, true);
+    }
+
     public function test_encontrar_varios(): void
     {
         $res = $this->catalogo->encontrarVarios(['A-100', 'A-102', 'NO']);

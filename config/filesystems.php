@@ -55,7 +55,10 @@ return [
             'bucket' => env('AWS_BUCKET'),
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
-            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+            // El S3 propio (s3.gumacorp.com) usa rutas tipo endpoint/bucket/archivo.
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', true),
+            // Verificación SSL del endpoint: solo apágala en desarrollo con AWS_SSL_VERIFY=false.
+            'http' => ['verify' => env('AWS_SSL_VERIFY', true)],
             'throw' => false,
             'report' => false,
         ],

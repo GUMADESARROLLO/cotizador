@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Catalogo\Catalogo;
+use App\Clientes\Clientes;
 use App\Models\Pedido;
 use App\Pedidos\Carrito;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ class PedidoController extends Controller
         $pedidos = Pedido::query()
             ->when($request->query('q'), fn ($q, $t) => $q->where(fn ($w) => $w
                 ->where('folio', 'like', "%{$t}%")
-                ->orWhere('cliente', 'like', "%{$t}%")))
+                ->orWhere('cliente', 'like', "%{$t}%")
+                ->orWhere('cliente_codigo', $t)))
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -28,13 +30,27 @@ class PedidoController extends Controller
         return view('pedidos.show', ['pedido' => $pedido->load('items')]);
     }
 
-    public function store(Request $request, Catalogo $catalogo, Carrito $carrito)
+    public function store(Request $request, Catalogo $catalogo, Clientes $clientes, Carrito $carrito)
     {
         $data = $request->validate([
-            'cliente' => ['required', 'string', 'max:150'],
             'contacto' => ['nullable', 'string', 'max:150'],
             'notas' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // Datos actuales del cliente (crédito al día; puede haberse desactivado).
+        $cliente = $clientes->encontrar($carrito->cliente()->codigo);
+        if (! $cliente) {
+            return redirect()->route('clientes.index')
+                ->with('aviso', 'El cliente ya no está activo. Elige otro para continuar el pedido.');
+        }
+        $carrito->fijarCliente($cliente);
+
+        $data += [
+            'cliente_codigo' => $cliente->codigo,
+            'cliente' => $cliente->nombre,
+            'cliente_ruc' => $cliente->ruc ?: null,
+            'credito_disponible' => $cliente->disponible,
+        ];
 
         if ($carrito->vacio()) {
             return redirect()->route('carrito.index')
@@ -78,7 +94,7 @@ class PedidoController extends Controller
             return $pedido;
         });
 
-        $carrito->vaciar();
+        $carrito->terminar(); // el siguiente pedido empieza eligiendo cliente
 
         return redirect()->route('pedidos.show', $pedido)->with('creado', true);
     }

@@ -3,7 +3,7 @@
         <label class="relative block">
             <span class="sr-only">Buscar por folio o cliente</span>
             <svg viewBox="0 0 24 24" class="text-royal pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2" fill="currentColor" aria-hidden="true"><path d="M10.5 3a7.5 7.5 0 0 1 5.96 12.05l4.25 4.24a1 1 0 0 1-1.42 1.42l-4.24-4.25A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"/></svg>
-            <input type="search" name="q" value="{{ request('q') }}" placeholder="Folio o cliente" enterkeyhint="search"
+            <input type="search" name="q" value="{{ request('q') }}" placeholder="Folio, cliente o código" enterkeyhint="search"
                    class="text-ink placeholder:text-ink-soft focus:shadow-[0_0_0_3px_var(--color-cyan)] h-12 w-full rounded-[14px] bg-white pr-3 pl-11 font-medium outline-none">
         </label>
     </form>

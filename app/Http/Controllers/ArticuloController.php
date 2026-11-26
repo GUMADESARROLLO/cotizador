@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Catalogo\Catalogo;
+use App\Catalogo\Imagenes;
 use App\Pedidos\Carrito;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -13,11 +14,14 @@ class ArticuloController extends Controller
 {
     public function index(Carrito $carrito)
     {
-        return view('articulos.index', ['resumen' => $carrito->resumen()]);
+        return view('articulos.index', [
+            'resumen' => $carrito->resumen(),
+            'cliente' => $carrito->cliente(),
+        ]);
     }
 
     /** Devuelve el fragmento HTML de resultados (se carga con fetch). */
-    public function buscar(Request $request, Catalogo $catalogo, Carrito $carrito)
+    public function buscar(Request $request, Catalogo $catalogo, Carrito $carrito, Imagenes $imagenes)
     {
         $q = trim((string) $request->query('q', ''));
         $error = false;
@@ -36,6 +40,7 @@ class ArticuloController extends Controller
             'q' => $q,
             'articulos' => $articulos,
             'error' => $error,
+            'imagenes' => $imagenes->urls(array_map(fn ($a) => $a->codigo, $articulos)),
             'enCarrito' => array_map(fn ($i) => $i['cantidad'], $carrito->items()),
         ]);
     }

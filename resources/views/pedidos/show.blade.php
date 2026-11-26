@@ -21,6 +21,12 @@
     <div class="space-y-7">
         <ul class="group-list">
             <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">Cliente</span><span class="text-right font-bold">{{ $pedido->cliente }}</span></li>
+            @if ($pedido->cliente_codigo)
+                <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">Código</span><span class="num text-lg font-bold">{{ $pedido->cliente_codigo }}</span></li>
+            @endif
+            @if ($pedido->cliente_ruc)
+                <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">RUC</span><span class="text-right font-semibold">{{ $pedido->cliente_ruc }}</span></li>
+            @endif
             @if ($pedido->contacto)
                 <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">Contacto</span><span class="text-right font-semibold">{{ $pedido->contacto }}</span></li>
             @endif
@@ -45,6 +51,12 @@
                 </li>
             </ul>
         </section>
+
+        @if ($pedido->credito_disponible !== null && $pedido->total > $pedido->credito_disponible)
+            <p class="bg-warn-soft text-warn rounded-[20px] px-4 py-3 text-sm font-semibold">
+                ⚠ Al confirmar, el total superaba el crédito disponible del cliente ({{ dinero($pedido->credito_disponible) }}).
+            </p>
+        @endif
 
         @if ($pedido->notas)
             <section>

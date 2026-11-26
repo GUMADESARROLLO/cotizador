@@ -1,4 +1,5 @@
-<x-layouts.app title="Buscar artículos" slogan="Precio farmacia y existencia en línea" tab="buscar" :resumen="$resumen">
+<x-layouts.app title="Buscar artículos" slogan="Precio INST.PUB. C$ y existencia en línea" tab="articulos" :resumen="$resumen">
+    <x-cliente-actual :cliente="$cliente" />
     {{-- Campo de búsqueda; se queda fijo debajo de la barra al desplazar. --}}
     <form role="search" action="{{ route('articulos.index') }}" data-search
           data-endpoint="{{ route('articulos.buscar') }}"
