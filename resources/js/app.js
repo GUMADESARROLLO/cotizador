@@ -152,30 +152,17 @@ let inflight = 0; // peticiones enviadas sin respuesta
 const isSyncing = () => pending.size > 0 || inflight > 0;
 
 function paintStepper(st, value) {
-    const max = Number(st.dataset.max);
     st.dataset.qty = value;
     const input = $('[data-qty-input]', st);
     if (input) input.value = value;
-    const plus = $('[data-step="1"]', st);
-    if (plus) plus.disabled = value + 1 > max;
-    const add = $('[data-step="add"]', st);
-    if (add) {
-        st.toggleAttribute('data-empty', value === 0);
-        add.disabled = max <= 0;
-        add.textContent = max <= 0 ? 'Agotado' : 'Agregar';
-    }
+    // Sin tope: se pueden pedir agotados o más de lo disponible (traslados); el servidor avisa.
+    if ($('[data-step="add"]', st)) st.toggleAttribute('data-empty', value === 0);
 }
 
 function setQty(st, wanted) {
-    const max = Number(st.dataset.max);
     // En unidades (viales…) enteras; en cajas se admite fracción.
     const n = numero(wanted) || 0;
-    let value = Math.max(0, st.dataset.modo === 'unidad' ? Math.floor(n) : bajar4(n));
-    if (value > max) {
-        value = max;
-        haptic();
-        toast(`Máximo disponible: ${qty(max)}`);
-    }
+    const value = Math.max(0, st.dataset.modo === 'unidad' ? Math.floor(n) : bajar4(n));
     paintStepper(st, value);
     sync(st, value);
 }
@@ -206,7 +193,7 @@ function sync(st, value) {
                     s.dataset.max = data.maximo;
                     paintStepper(s, data.cantidad);
                 });
-                if (data.ajustado) {
+                if (data.ajustado || data.excede) {
                     haptic();
                     toast(data.message);
                 }
@@ -319,25 +306,26 @@ const aIso = (f) => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '
 const fechaLarga = (f) => `${DIAS[f.getDay()]} ${f.getDate()} de ${MESES[f.getMonth()]} de ${f.getFullYear()}`;
 const sumarDias = (f, n) => new Date(f.getFullYear(), f.getMonth(), f.getDate() + n);
 
-function initFecha() {
-    const sheet = $('[data-fecha-sheet]');
-    const trigger = $('[data-fecha-trigger]');
-    if (!sheet || !trigger) return;
+/*
+ * Calendario reutilizable en panel inferior (componente x-calendario).
+ * opciones: min/max (Date o null = sin límite), hoy, rapidos(hoy) → [[texto, Date]],
+ * alElegir(iso) → Promise<boolean> (true cierra el panel), alQuitar() opcional.
+ */
+function crearCalendario(sheet, { min = null, max = null, hoy, rapidos = () => [], alElegir, alQuitar = null }) {
     const h = hoja(sheet);
     const grid = $('[data-cal-grid]', sheet);
-    const min = aFecha(trigger.dataset.min);
-    const max = aFecha(trigger.dataset.max);
-    const hoy = aFecha(trigger.dataset.min);
-    let elegida = aFecha(trigger.dataset.fecha);
-    let vista = new Date(elegida.getFullYear(), elegida.getMonth(), 1);
+    let elegida = null;
+    let vista = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    let lim = { min, max };
 
-    const enRango = (f) => f >= min && f <= max;
+    const enRango = (f) => (!lim.min || f >= lim.min) && (!lim.max || f <= lim.max);
+    const mes = (f) => new Date(f.getFullYear(), f.getMonth(), 1);
 
     function dibujar() {
-        $('[data-cal-elegida]', sheet).textContent = fechaLarga(elegida);
+        $('[data-cal-elegida]', sheet).textContent = elegida ? fechaLarga(elegida) : 'Elige un día';
         $('[data-cal-titulo]', sheet).textContent = `${MESES[vista.getMonth()]} ${vista.getFullYear()}`;
-        $('[data-cal-mes="-1"]', sheet).disabled = vista <= new Date(min.getFullYear(), min.getMonth(), 1);
-        $('[data-cal-mes="1"]', sheet).disabled = vista >= new Date(max.getFullYear(), max.getMonth(), 1);
+        $('[data-cal-mes="-1"]', sheet).disabled = !!lim.min && vista <= mes(lim.min);
+        $('[data-cal-mes="1"]', sheet).disabled = !!lim.max && vista >= mes(lim.max);
 
         // Semana de lunes a domingo.
         const encabezado = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
@@ -349,72 +337,134 @@ function initFecha() {
         for (let d = 1; d <= diasMes; d++) {
             const f = new Date(vista.getFullYear(), vista.getMonth(), d);
             const iso = aIso(f);
-            const sel = iso === aIso(elegida);
+            const sel = elegida && iso === aIso(elegida);
             const esHoy = iso === aIso(hoy);
-            celdas += `<button type="button" data-dia="${iso}" ${enRango(f) ? '' : 'disabled'} aria-pressed="${sel}"
+            celdas += `<button type="button" data-dia="${iso}" ${enRango(f) ? '' : 'disabled'} aria-pressed="${!!sel}"
                 aria-label="${fechaLarga(f)}${esHoy ? ', hoy' : ''}"
                 class="cal-dia pressable mx-auto grid size-11 place-items-center rounded-full text-[17px] font-semibold
                        ${!enRango(f) ? 'text-label-3 font-normal' : sel ? 'bg-royal text-white' : esHoy ? 'text-royal ring-cyan ring-2' : 'text-ink'}">${d}</button>`;
         }
         grid.innerHTML = encabezado + celdas;
 
-        // Accesos rápidos: el caso típico es armarlo hoy con fecha del lunes.
-        const proxLunes = sumarDias(hoy, ((8 - hoy.getDay()) % 7) || 7);
-        const rapidos = [
-            ['Hoy', hoy],
-            ['Mañana', sumarDias(hoy, 1)],
-            [`Próximo lunes ${proxLunes.getDate()}`, proxLunes],
-        ];
-        $('[data-cal-rapidos]', sheet).innerHTML = rapidos
+        $('[data-cal-rapidos]', sheet).innerHTML = rapidos(hoy)
             .filter(([, f]) => enRango(f))
-            .map(
-                ([t, f]) => `<button type="button" data-dia="${aIso(f)}" aria-pressed="${aIso(f) === aIso(elegida)}"
-                    class="pressable rounded-full px-4 py-2 text-[14px] font-bold ${aIso(f) === aIso(elegida) ? 'bg-royal text-white' : 'bg-mist text-royal'}">${t}</button>`,
-            )
+            .map(([t, f]) => {
+                const sel = elegida && aIso(f) === aIso(elegida);
+                return `<button type="button" data-dia="${aIso(f)}" aria-pressed="${!!sel}"
+                    class="pressable rounded-full px-4 py-2 text-[14px] font-bold ${sel ? 'bg-royal text-white' : 'bg-mist text-royal'}">${t}</button>`;
+            })
             .join('');
     }
 
-    async function elegir(iso) {
-        sheet.querySelectorAll('[data-dia]').forEach((b) => (b.disabled = true));
-        try {
-            const res = await fetch('/pedido/fecha', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
-                body: JSON.stringify({ fecha: iso }),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                haptic();
-                toast(data.errors?.fecha?.[0] ?? data.message ?? 'No se pudo cambiar la fecha.');
-                dibujar();
-                return;
-            }
-            elegida = aFecha(data.fecha);
-            trigger.dataset.fecha = data.fecha;
-            $('[data-fecha-texto]', trigger).textContent = data.corta;
-            dibujar();
-            h.cerrar();
-        } catch {
-            toast('Sin conexión. La fecha no se cambió.');
-            dibujar();
-        }
-    }
-
-    trigger.addEventListener('click', () => {
-        vista = new Date(elegida.getFullYear(), elegida.getMonth(), 1);
-        dibujar();
-        h.abrir(trigger);
-        $('[aria-pressed="true"]', grid)?.focus({ preventScroll: true });
-    });
     sheet.querySelectorAll('[data-cal-mes]').forEach((b) =>
         b.addEventListener('click', () => {
             vista = new Date(vista.getFullYear(), vista.getMonth() + Number(b.dataset.calMes), 1);
             dibujar();
         }),
     );
-    sheet.addEventListener('click', (e) => {
+    sheet.addEventListener('click', async (e) => {
         const dia = e.target.closest('[data-dia]');
-        if (dia && !dia.disabled) elegir(dia.dataset.dia);
+        if (!dia || dia.disabled) return;
+        const iso = dia.dataset.dia;
+        sheet.querySelectorAll('[data-dia]').forEach((b) => (b.disabled = true));
+        const ok = await alElegir(iso);
+        if (ok) {
+            elegida = aFecha(iso);
+            h.cerrar();
+        }
+        dibujar();
+    });
+    $('[data-cal-quitar]', sheet)?.addEventListener('click', () => {
+        alQuitar?.();
+        h.cerrar();
+    });
+
+    return {
+        /** Abre el panel con la fecha actual (iso o vacío) y, si se indica, otros límites. */
+        abrir(trigger, iso, limites = {}) {
+            lim = { min, max, ...limites };
+            elegida = iso ? aFecha(iso) : null;
+            vista = mes(elegida ?? (lim.max && hoy > lim.max ? lim.max : hoy));
+            if (limites.titulo) $('[data-cal-eyebrow]', sheet).textContent = limites.titulo;
+            dibujar();
+            h.abrir(trigger);
+            $('[aria-pressed="true"]', grid)?.focus({ preventScroll: true });
+        },
+    };
+}
+
+/* Fecha del pedido (pantalla Pedido): se guarda en el servidor al elegirla. */
+function initFecha() {
+    const sheet = $('[data-fecha-sheet]');
+    const trigger = $('[data-fecha-trigger]');
+    if (!sheet || !trigger) return;
+    const hoy = aFecha(trigger.dataset.hoy);
+
+    const cal = crearCalendario(sheet, {
+        min: aFecha(trigger.dataset.min),
+        max: aFecha(trigger.dataset.max),
+        hoy,
+        // Accesos rápidos: ingresar uno de ayer, o armarlo hoy con fecha del lunes.
+        rapidos: (h) => {
+            const proxLunes = sumarDias(h, ((8 - h.getDay()) % 7) || 7);
+            return [['Ayer', sumarDias(h, -1)], ['Hoy', h], ['Mañana', sumarDias(h, 1)], [`Próximo lunes ${proxLunes.getDate()}`, proxLunes]];
+        },
+        alElegir: async (iso) => {
+            try {
+                const { res, data } = await postJson('/pedido/fecha', { fecha: iso });
+                if (!res.ok) {
+                    haptic();
+                    toast(data.errors?.fecha?.[0] ?? data.message ?? 'No se pudo cambiar la fecha.');
+                    return false;
+                }
+                trigger.dataset.fecha = data.fecha;
+                $('[data-fecha-texto]', trigger).textContent = data.corta;
+                return true;
+            } catch {
+                toast('Sin conexión. La fecha no se cambió.');
+                return false;
+            }
+        },
+    });
+
+    trigger.addEventListener('click', () => cal.abrir(trigger, trigger.dataset.fecha));
+}
+
+/* Historial: filtros Desde / Hasta (fecha de creación). Al elegir, se filtra. */
+function initFiltroFechas() {
+    const sheet = $('[data-filtro-sheet]');
+    const form = $('[data-filtro-form]');
+    if (!sheet || !form) return;
+    const hoy = aFecha(form.dataset.hoy);
+    const input = (campo) => $(`input[name="${campo}"]`, form);
+    let campo = 'desde';
+
+    const cal = crearCalendario(sheet, {
+        max: hoy,
+        hoy,
+        rapidos: (h) =>
+            campo === 'desde'
+                ? [['Hoy', h], ['Hace 7 días', sumarDias(h, -7)], ['Inicio de mes', new Date(h.getFullYear(), h.getMonth(), 1)]]
+                : [['Hoy', h], ['Ayer', sumarDias(h, -1)]],
+        alElegir: async (iso) => {
+            input(campo).value = iso;
+            form.requestSubmit();
+            return true;
+        },
+        alQuitar: () => {
+            input(campo).value = '';
+            form.requestSubmit();
+        },
+    });
+
+    form.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-filtro-fecha]');
+        if (!b) return;
+        campo = b.dataset.filtroFecha;
+        // Desde no puede pasar de Hasta, ni Hasta ser antes de Desde.
+        const otro = input(campo === 'desde' ? 'hasta' : 'desde').value;
+        const limites = campo === 'desde' ? { max: otro ? aFecha(otro) : hoy } : { min: otro ? aFecha(otro) : null };
+        cal.abrir(b, input(campo).value, { ...limites, titulo: campo === 'desde' ? 'Creados desde' : 'Creados hasta' });
     });
 }
 
@@ -489,17 +539,20 @@ function initEditor() {
         // Disponible del lote elegido (o de la bodega) y aviso si se pasa.
         const disp = disponible();
         const excede = cajas() > disp + 1e-6;
-        $$('.ed-campo', el('cantidades')).forEach((c) => c.classList.toggle('is-excede', excede));
+        // Se permite (se completa con traslados): solo se avisa, sin bloquear.
         const dispTxt = `${qty(bajar4(disp))} ${a.unidad}` + (empaque() ? ` · ${qty(unidadesDe(disp, factor()))} ${a.unidad_empaque}` : '');
-        el('disponible').textContent = (excede ? 'Se pasa de lo disponible: ' : 'Disponible: ') + dispTxt;
-        el('disponible').classList.toggle('text-danger', excede);
+        el('disponible').textContent = excede
+            ? (disp > 0 ? `Excede lo disponible (${dispTxt}); se pedirá igual.` : `Sin existencia en bodega; se pedirá igual.`)
+            : 'Disponible: ' + dispTxt;
+        el('disponible').classList.toggle('text-warn', excede);
+        el('disponible').classList.toggle('font-semibold', excede);
 
         const nivel = a.precio_nivel;
         el('nivel-texto').textContent = nivel > 0 ? `Nivel del cliente: ${money(nivel)} / ${a.unidad}` : 'Sin precio en el nivel del cliente.';
         const manual = !usarNivel && (precioTocado ? Math.abs(precioCaja() - nivel) > 0.00005 : a.manual);
         el('usar-nivel').hidden = !(nivel > 0 && manual);
 
-        el('subtotal').textContent = money(Math.min(cajas(), disp) * precioCaja());
+        el('subtotal').textContent = money(cajas() * precioCaja());
     }
 
     function pintarLotes() {
@@ -629,7 +682,7 @@ function initEditor() {
             const li = fila.closest('[data-cart-row]');
             li.insertAdjacentHTML('afterend', data.html);
             li.remove();
-            if (data.ajustado) {
+            if (data.ajustado || data.excede) {
                 haptic();
                 toast(data.message);
             }
@@ -649,6 +702,44 @@ function initEditor() {
     document.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-editar-articulo]');
         if (btn) abrir(btn);
+    });
+}
+
+/* Consecutivo de Softland del pedido (DESP-A, DESP-B…): se elige en un panel. */
+function initConsecutivo() {
+    const sheet = $('[data-consecutivo-sheet]');
+    const trigger = $('[data-consecutivo-trigger]');
+    if (!sheet || !trigger) return;
+    const h = hoja(sheet);
+
+    trigger.addEventListener('click', () => h.abrir(trigger));
+    sheet.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-consecutivo]');
+        if (!b) return;
+        if (b.getAttribute('aria-checked') === 'true') return h.cerrar();
+        $$('[data-consecutivo]', sheet).forEach((x) => (x.disabled = true));
+        try {
+            const { res, data } = await postJson('/pedido/consecutivo', { consecutivo: b.dataset.consecutivo });
+            if (!res.ok) {
+                haptic();
+                toast(data.message ?? 'No se pudo cambiar el consecutivo.');
+                return;
+            }
+            $$('[data-consecutivo]', sheet).forEach((x) => {
+                const sel = x === b;
+                x.setAttribute('aria-checked', String(sel));
+                const check = $('[data-check]', x);
+                check.className = `grid size-6 shrink-0 place-items-center rounded-full ${sel ? 'bg-royal text-white' : 'ring-line ring-2'}`;
+                $('svg', check).classList.toggle('hidden', !sel);
+            });
+            $('[data-numero-pedido]', trigger).textContent = `N.º ${data.numero}`;
+            $('[data-consecutivo-texto]', trigger).textContent = data.consecutivo;
+            h.cerrar();
+        } catch {
+            toast('Sin conexión. El consecutivo no se cambió.');
+        } finally {
+            $$('[data-consecutivo]', sheet).forEach((x) => (x.disabled = false));
+        }
     });
 }
 
@@ -700,7 +791,7 @@ function initSoftland() {
             const r = await Swal.fire({
                 icon: 'question',
                 title: '¿Enviar a Softland?',
-                html: `Se creará el pedido <b>${escapar(d.folio)}</b> en Softland para<br><b>${escapar(d.cliente)}</b><br>
+                html: `Se creará el pedido en Softland para<br><b>${escapar(d.cliente)}</b><br>
                        <span class="swal-detalle">${escapar(d.lineas)} artículo(s) · ${escapar(d.total)}<br>
                        Consecutivo ${escapar(d.consecutivo)} · usuario ${escapar(d.usuario)}</span>`,
                 showCancelButton: true,
@@ -735,6 +826,8 @@ function initSoftland() {
 initSteppers();
 initEditor();
 initFecha();
+initFiltroFechas();
+initConsecutivo();
 initConfirmForm();
 initSoftland();
 if (window.__aviso) toast(window.__aviso);

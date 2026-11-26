@@ -111,29 +111,38 @@ class PedidoFlowTest extends TestCase
         $this->get('/articulos/buscar?q=RON-0020')->assertSee('Agotado');
     }
 
-    public function test_cantidad_se_limita_a_la_existencia(): void
+    public function test_se_puede_pedir_mas_de_la_existencia_con_aviso(): void
     {
+        // Se completa con traslados antes de facturar: no se recorta, solo se avisa.
         $this->catalogo([$this->fila('A1', 5)]);
         $this->elegirCliente();
 
         $this->postJson('/pedido/items', ['codigo' => 'A1', 'cantidad' => 8])
             ->assertOk()
             ->assertJson([
-                'cantidad' => 5,
+                'cantidad' => 8,
                 'maximo' => 5,
-                'ajustado' => true,
-                'subtotal' => 50,
-                'resumen' => ['lineas' => 1, 'piezas' => 5, 'total' => 50],
+                'ajustado' => false,
+                'excede' => true,
+                'subtotal' => 80,
+                'resumen' => ['lineas' => 1, 'piezas' => 8, 'total' => 80],
             ]);
+
+        $this->get('/pedido')->assertSee('Excede lo disponible (5 PZA) · se pedirá igual');
     }
 
-    public function test_no_se_puede_pedir_un_agotado(): void
+    public function test_se_puede_pedir_un_agotado(): void
     {
         $this->catalogo([$this->fila('A1', 0)]);
         $this->elegirCliente();
 
-        $this->postJson('/pedido/items', ['codigo' => 'A1', 'cantidad' => 1])
-            ->assertJson(['cantidad' => 0, 'resumen' => ['lineas' => 0]]);
+        $this->postJson('/pedido/items', ['codigo' => 'A1', 'cantidad' => 3])
+            ->assertJson(['cantidad' => 3, 'excede' => true, 'resumen' => ['lineas' => 1]])
+            ->assertJsonPath('message', 'Sin existencia en bodega 006; se pedirá igual.');
+
+        $this->get('/pedido')->assertSee('Sin existencia en bodega 006 · se pedirá igual');
+        $this->post('/pedidos', [])->assertRedirect();
+        $this->assertEquals(3, Pedido::sole()->piezas);
     }
 
     public function test_cantidad_cero_quita_el_articulo(): void
@@ -176,7 +185,7 @@ class PedidoFlowTest extends TestCase
         $this->assertEquals([4, 3], $pedido->items->pluck('cantidad')->all());
 
         $this->get(route('pedidos.show', $pedido))->assertSee('FARMACIA LA PROVIDENCIA')->assertSee('$310.00');
-        $this->get('/pedidos?q=00003')->assertSee('P-000001');
+        $this->get('/pedidos?q=00003')->assertSee('Sin enviar')->assertDontSee('P-000001');
 
         // El siguiente pedido empieza otra vez eligiendo cliente.
         $this->get('/articulos')->assertRedirect(route('clientes.index'));
@@ -217,25 +226,16 @@ class PedidoFlowTest extends TestCase
         $this->assertSame(0, Pedido::count());
     }
 
-    public function test_si_la_existencia_baja_antes_de_confirmar_se_ajusta_y_no_se_guarda(): void
+    public function test_si_la_existencia_baja_antes_de_confirmar_se_guarda_igual(): void
     {
         $this->catalogo([$this->fila('A1', 10)]);
         $this->elegirCliente();
         $this->postJson('/pedido/items', ['codigo' => 'A1', 'cantidad' => 8]);
 
-        // Alguien más compró: ahora solo hay 3.
+        // Alguien más compró: ahora solo hay 3. La cantidad no se recorta.
         $this->catalogo([$this->fila('A1', 3)]);
 
-        $this->post('/pedidos', [])
-            ->assertRedirect(route('carrito.index'))
-            ->assertSessionHas('aviso')
-            ->assertSessionHas('ajustados', ['A1']);
-
-        $this->assertSame(0, Pedido::count());
-
-        // Segundo intento con la cantidad ya ajustada: sí se guarda.
         $this->post('/pedidos', [])->assertRedirect();
-        $this->assertSame(1, Pedido::count());
-        $this->assertEquals(3, Pedido::sole()->piezas);
+        $this->assertEquals(8, Pedido::sole()->piezas);
     }
 }

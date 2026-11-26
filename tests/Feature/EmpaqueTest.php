@@ -57,10 +57,10 @@ class EmpaqueTest extends TestCase
         $this->postJson('/pedido/items', ['codigo' => '13705183', 'cantidad' => 2810, 'modo' => 'unidad'])
             ->assertJson(['cajas' => 56.2, 'equivalencia' => '= 56.2 CJA']);
 
-        // 100.26 CJA × 50 = 5,013 viales como máximo.
+        // 100.26 CJA × 50 = 5,013 viales disponibles: se pueden pedir más (solo se avisa).
         $this->postJson('/pedido/items', ['codigo' => '13705183', 'cantidad' => 9999, 'modo' => 'unidad'])
-            ->assertJson(['cantidad' => 5013, 'maximo' => 5013, 'ajustado' => true])
-            ->assertJsonPath('message', 'Solo hay 5,013 VIA disponibles en el lote L1.');
+            ->assertJson(['cantidad' => 9999, 'maximo' => 5013, 'ajustado' => false, 'excede' => true, 'cajas' => 199.98])
+            ->assertJsonPath('message', 'Hay 100.26 CJA en bodega 006 (lote L1); se pedirá igual.');
     }
 
     public function test_cambiar_a_cajas_conserva_lo_pedido(): void
@@ -160,10 +160,10 @@ class EmpaqueTest extends TestCase
         $this->assertStringContainsString('2,800 VIA', $r->json('html'));
         $this->assertStringContainsString('L2', $r->json('html'));
 
-        // Lote con menos existencia: se ajusta y avisa.
+        // Lote con menos existencia: se mantiene la cantidad y solo se avisa.
         $this->postJson('/pedido/items/editar', ['codigo' => '13705183', 'cantidad' => 2800, 'modo' => 'unidad', 'lote' => 'L1'])
-            ->assertJson(['ajustado' => true])
-            ->assertJsonPath('message', 'Se ajustó a lo disponible: 500 VIA (lote L1).');
+            ->assertJson(['ajustado' => false, 'excede' => true])
+            ->assertJsonPath('message', 'Hay 10 CJA en bodega 006 (lote L1); se pedirá igual.');
 
         // Sin tocar el precio, se conserva el manual; precio_nivel lo devuelve.
         $this->postJson('/pedido/items/editar', ['codigo' => '13705183', 'cantidad' => 5, 'modo' => 'caja', 'lote' => 'L1', 'precio_nivel' => true])

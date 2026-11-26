@@ -21,12 +21,18 @@ class CarritoController extends Controller
 {
     public function index(Carrito $carrito, ConsecutivoPedido $consecutivo, Lotes $lotes)
     {
-        // Número tentativo que tendría el pedido en Softland (solo lectura).
+        // Consecutivo elegido (por defecto DESP-A), los DESP- que se pueden elegir
+        // y el número tentativo que tendría el pedido en Softland (solo lectura).
+        $codigo = $carrito->consecutivo() ?? $consecutivo->codigo();
+        $consecutivos = [];
+        $numero = null;
         try {
-            $numero = $carrito->vacio() ? null : $consecutivo->siguiente();
+            if (! $carrito->vacio()) {
+                $consecutivos = $consecutivo->disponibles();
+                $numero = $consecutivos[$codigo]['siguiente'] ?? $consecutivo->siguiente($codigo);
+            }
         } catch (Throwable $e) {
             Log::warning('Consecutivo de pedido Softland: '.$e->getMessage());
-            $numero = null;
         }
 
         // Lotes de la bodega para elegir en cada artículo.
@@ -43,25 +49,46 @@ class CarritoController extends Controller
             'resumen' => $carrito->resumen(),
             'cliente' => $carrito->cliente(),
             'numeroPedido' => $numero,
-            'codigoConsecutivo' => $consecutivo->codigo(),
+            'codigoConsecutivo' => $codigo,
+            'consecutivos' => $consecutivos,
             // Pedido guardado que se está modificando (null = pedido nuevo).
             'editando' => $carrito->editando() ? Pedido::find($carrito->editando()) : null,
             'observaciones' => $carrito->observaciones(),
             // Fecha del pedido (calendario): de hoy hasta N días adelante.
             'fecha' => $carrito->fecha(),
-            'fechaMin' => today(),
+            'fechaMin' => today()->subDays(config('softland.fecha_min_dias')),
             'fechaMax' => today()->addDays(config('softland.fecha_max_dias')),
+        ]);
+    }
+
+    /** Elige el consecutivo de Softland del pedido (solo los DESP-). Responde JSON con el número tentativo. */
+    public function consecutivo(Request $request, Carrito $carrito, ConsecutivoPedido $consecutivo)
+    {
+        $data = $request->validate(['consecutivo' => ['required', 'string', 'max:20']]);
+
+        $disponibles = $consecutivo->disponibles();
+        if (! $consecutivo->permitido($data['consecutivo']) || ! isset($disponibles[$data['consecutivo']])) {
+            return response()->json(['message' => 'Ese consecutivo no se puede usar para los pedidos.'], 422);
+        }
+
+        // El de la configuración se guarda como null (pedido "normal").
+        $carrito->fijarConsecutivo($data['consecutivo'] === $consecutivo->codigo() ? null : $data['consecutivo']);
+
+        return response()->json([
+            'consecutivo' => $data['consecutivo'],
+            'numero' => $disponibles[$data['consecutivo']]['siguiente'],
         ]);
     }
 
     /** Fija la fecha del pedido elegida en el calendario. Responde JSON. */
     public function fecha(Request $request, Carrito $carrito)
     {
+        $min = today()->subDays(config('softland.fecha_min_dias'));
         $max = today()->addDays(config('softland.fecha_max_dias'));
         $data = $request->validate([
-            'fecha' => ['required', 'date_format:Y-m-d', 'after_or_equal:today', 'before_or_equal:'.$max->format('Y-m-d')],
+            'fecha' => ['required', 'date_format:Y-m-d', 'after_or_equal:'.$min->format('Y-m-d'), 'before_or_equal:'.$max->format('Y-m-d')],
         ], [
-            'fecha.after_or_equal' => 'La fecha del pedido no puede ser anterior a hoy.',
+            'fecha.after_or_equal' => 'La fecha del pedido puede ser como mínimo el '.fecha_larga($min).'.',
             'fecha.before_or_equal' => 'La fecha del pedido puede ser como máximo el '.fecha_larga($max).'.',
         ]);
 
@@ -218,14 +245,14 @@ class CarritoController extends Controller
         }
 
         $item = $carrito->items()[$articulo->codigo];
-        $ajustado = $aplicada < Cantidades::bajar4($pedida) - 0.00001;
+        // Se puede pedir más de lo disponible (se completa con traslados): solo se avisa.
+        $excede = Carrito::excede($item, $lote) > 0;
 
         return response()->json([
-            'html' => view('carrito._linea', ['i' => $item, 'lotesArt' => $disponibles, 'ajustado' => $ajustado])->render(),
-            'ajustado' => $ajustado,
-            'message' => $ajustado
-                ? 'Se ajustó a lo disponible: '.Linea::capturadaTexto($item).($lote ? " (lote {$lote->lote})." : '.')
-                : null,
+            'html' => view('carrito._linea', ['i' => $item, 'lotesArt' => $disponibles])->render(),
+            'ajustado' => false,
+            'excede' => $excede,
+            'message' => $excede ? $this->avisoExistencia($articulo, $lote) : null,
             'resumen' => $carrito->resumen(),
         ]);
     }
@@ -247,21 +274,31 @@ class CarritoController extends Controller
         $maximo = $enUnidades
             ? ($lote ? $lote->maximoUnidades($articulo->factor) : $articulo->maximoUnidades())
             : ($lote ? $lote->maximoPedible() : $articulo->maximoPedible());
-        $unidad = $enUnidades ? ($articulo->unidadEmpaque ?: 'UND') : $articulo->unidad;
-        $ajustado = $aplicada < Cantidades::bajar4($pedida) - 0.00001;
+        // No se recorta: se puede pedir más de lo disponible (se completa con traslados); solo se avisa.
+        $excede = $item && Carrito::excede($item, $lote) > 0;
 
         return response()->json([
             'codigo' => $articulo->codigo,
             'cantidad' => $aplicada,
-            'maximo' => $maximo,
+            'maximo' => $maximo, // disponible, solo informativo
             'existencia' => $articulo->existencia,
             'lote' => $lote?->toArray(),
-            'ajustado' => $ajustado,
-            'message' => $ajustado
-                ? 'Solo hay '.cantidad($maximo)." {$unidad} disponibles".($lote ? " en el lote {$lote->lote}." : '.')
-                : null,
+            'ajustado' => false,
+            'excede' => $excede,
+            'message' => $excede ? $this->avisoExistencia($articulo, $lote) : null,
             'resumen' => $carrito->resumen(),
         ] + ($item ? $this->linea($item) : ['subtotal' => 0, 'modo' => $enUnidades ? Carrito::UNIDAD : Carrito::CAJA]));
+    }
+
+    /** "Hay 3,338 CJA en bodega 006 (lote H25124); se pedirá igual." */
+    private function avisoExistencia(Articulo $articulo, ?Lote $lote): string
+    {
+        $disponible = $lote ? $lote->disponible : $articulo->existencia;
+        $bodega = config('softland.bodega');
+
+        return $disponible <= 0
+            ? "Sin existencia en bodega {$bodega}; se pedirá igual."
+            : 'Hay '.cantidad(Cantidades::bajar4($disponible))." {$articulo->unidad} en bodega {$bodega}".($lote ? " (lote {$lote->lote})" : '').'; se pedirá igual.';
     }
 
     /** Datos de la línea para repintarla (mismos textos que la vista). */

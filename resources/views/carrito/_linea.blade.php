@@ -12,6 +12,9 @@
     $caja = Linea::unidadCaja($i);
     $interna = Linea::unidadInterna($i);
     $vence = fn ($f) => $f ? Carbon::parse($f)->format('d/m/Y') : 's/f';
+    // Se puede pedir más de lo disponible (o agotado): se completa con traslados. Solo se avisa.
+    $excede = Carrito::excede($i, $loteSel) > 0;
+    $disponible = $loteSel ? $loteSel->disponible : (float) $i['existencia'];
 
     // Lo que necesita el panel de edición.
     $datos = [
@@ -69,8 +72,13 @@
                 <span class="price shrink-0 leading-none">{{ dinero(Carrito::subtotal($i)) }}</span>
             </span>
 
+            @if ($excede)
+                <span class="text-foot text-warn mt-1.5 block font-semibold">
+                    {{ $disponible > 0 ? 'Excede lo disponible ('.cantidad(\App\Catalogo\Cantidades::bajar4($disponible)).' '.$caja.')' : 'Sin existencia en bodega '.config('softland.bodega') }} · se pedirá igual
+                </span>
+            @endif
             @if ($ajustado)
-                <span class="text-foot text-warn mt-1 block font-semibold">Ajustado a la existencia, lote o precio actual.</span>
+                <span class="text-foot text-warn mt-1 block font-semibold">Cambió la existencia, el lote o el precio.</span>
             @endif
         </span>
         <svg viewBox="0 0 24 24" class="text-label-3 mt-1 size-5 shrink-0" fill="currentColor" aria-hidden="true"><path d="M8.3 4.3a1 1 0 0 1 1.4 0l7 7a1 1 0 0 1 0 1.4l-7 7a1 1 0 0 1-1.4-1.4l6.29-6.3-6.3-6.3a1 1 0 0 1 0-1.4Z"/></svg>

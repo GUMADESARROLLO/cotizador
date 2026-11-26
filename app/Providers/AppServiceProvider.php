@@ -67,6 +67,7 @@ class AppServiceProvider extends ServiceProvider
                 db: $cfg['driver'] === 'demo' ? null : DB::connection($cfg['connection']),
                 esquema: $cfg['esquema'],
                 codigo: $cfg['consecutivo'],
+                prefijo: $cfg['consecutivos_prefijo'] ?? '',
             );
         });
 
@@ -89,7 +90,6 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(EnviarPedidoSoftland::class, fn ($app) => new EnviarPedidoSoftland(
             db: DB::connection(config('softland.connection')),
             preparador: $app->make(PedidoSoftland::class),
-            lotes: $app->make(Lotes::class),
             config: config('softland'),
         ));
 

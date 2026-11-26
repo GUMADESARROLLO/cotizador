@@ -26,6 +26,8 @@ class Carrito
 
     private const FECHA = 'carrito.fecha';
 
+    private const CONSECUTIVO = 'carrito.consecutivo';
+
     /** Modos de captura de la cantidad. */
     public const UNIDAD = 'unidad';
 
@@ -49,7 +51,7 @@ class Carrito
     /** Pedido terminado: quita artículos, cliente y edición para empezar otro. */
     public function terminar(): void
     {
-        $this->session->forget([self::KEY, self::CLIENTE, self::EDITANDO, self::OBSERVACIONES, self::FECHA]);
+        $this->session->forget([self::KEY, self::CLIENTE, self::EDITANDO, self::OBSERVACIONES, self::FECHA, self::CONSECUTIVO]);
     }
 
     /** Fecha del pedido (por defecto hoy). Se elige en el calendario de la pantalla Pedido. */
@@ -65,16 +67,28 @@ class Carrito
         $this->session->put(self::FECHA, $fecha->format('Y-m-d'));
     }
 
+    /** Consecutivo de Softland elegido (DESP-A, DESP-B…); null = el de la configuración. */
+    public function consecutivo(): ?string
+    {
+        return $this->session->get(self::CONSECUTIVO);
+    }
+
+    public function fijarConsecutivo(?string $codigo): void
+    {
+        $this->session->put(self::CONSECUTIVO, $codigo);
+    }
+
     /** Id del pedido de MySQL que se está modificando (null = pedido nuevo). */
     public function editando(): ?int
     {
         return $this->session->get(self::EDITANDO);
     }
 
-    public function editar(int $pedidoId, ?string $observaciones, ?CarbonInterface $fecha = null): void
+    public function editar(int $pedidoId, ?string $observaciones, ?CarbonInterface $fecha = null, ?string $consecutivo = null): void
     {
         $this->session->put(self::EDITANDO, $pedidoId);
         $this->session->put(self::OBSERVACIONES, $observaciones);
+        $this->fijarConsecutivo($consecutivo);
         if ($fecha) {
             $this->fijarFecha($fecha);
         }
@@ -108,9 +122,10 @@ class Carrito
      * 'caja' = cajas (se permiten fracciones). Sin modo se conserva el que tenía;
      * por defecto, cajas (las unidades se muestran como referencia).
      *
-     * Devuelve la cantidad aplicada en esa misma unidad; puede ser menor a la
-     * pedida si excede lo disponible: con lote, la existencia de ESE lote (un
-     * lote por artículo); sin lote, la de la bodega.
+     * Devuelve la cantidad aplicada en esa misma unidad. NO se limita a la
+     * existencia: se pueden pedir artículos agotados o más de lo disponible
+     * (se completa con traslados antes de facturar); la pantalla solo lo avisa
+     * (ver excede()).
      *
      * Un precio puesto a mano (fijarPrecio) se conserva al cambiar cantidad o lote.
      */
@@ -124,13 +139,11 @@ class Carrito
             : self::CAJA;
 
         if ($modo === self::UNIDAD) {
-            $maximo = $lote ? $lote->maximoUnidades($factor) : $articulo->maximoUnidades();
-            $unidades = max(0, min(floor($cantidad), $maximo));
+            $unidades = max(0, floor($cantidad));
             $cajas = Cantidades::cajas($unidades, $factor);
             $aplicada = $unidades;
         } else {
-            $maximo = $lote ? $lote->maximoPedible() : $articulo->maximoPedible();
-            $cajas = max(0, min(Cantidades::bajar4($cantidad), $maximo));
+            $cajas = max(0, Cantidades::bajar4($cantidad));
             $unidades = round($cajas * $factor, 4);
             $aplicada = $cajas;
         }
@@ -193,6 +206,17 @@ class Carrito
     }
 
     /** Subtotal de una línea: precio por caja × cajas. */
+    /**
+     * Cajas pedidas por encima de lo disponible (0 = alcanza). Con lote, la
+     * existencia de ese lote; sin lote, la de la bodega. Solo informativo.
+     */
+    public static function excede(array $item, ?Lote $lote = null): float
+    {
+        $disponible = $lote ? $lote->disponible : (float) ($item['existencia'] ?? 0);
+
+        return max(0, round((float) $item['cantidad'] - $disponible, 8));
+    }
+
     public static function subtotal(array $item): float
     {
         return round((float) $item['precio'] * (float) $item['cantidad'], 2);

@@ -420,9 +420,6 @@
         color: var(--color-label-2);
         font-weight: 700;
     }
-    .ed-campo.is-excede {
-        box-shadow: inset 0 0 0 2px var(--color-danger);
-    }
 
     /* ---------- SweetAlert2 con la línea Unimark ---------- */
     .swal-unimark {

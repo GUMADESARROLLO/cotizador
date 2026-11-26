@@ -148,9 +148,22 @@ class PedidoSoftlandTest extends TestCase
                 return 'DESP-A';
             }
 
-            public function siguiente(): ?string
+            public function siguiente(?string $codigo = null): ?string
             {
-                return '00007836';
+                return $this->disponibles()[$codigo ?? 'DESP-A']['siguiente'] ?? null;
+            }
+
+            public function disponibles(): array
+            {
+                return [
+                    'DESP-A' => ['codigo' => 'DESP-A', 'descripcion' => 'Despacho Serie A', 'siguiente' => '00007836'],
+                    'DESP-B' => ['codigo' => 'DESP-B', 'descripcion' => 'Despacho Serie-B', 'siguiente' => '21092030'],
+                ];
+            }
+
+            public function permitido(string $codigo): bool
+            {
+                return str_starts_with($codigo, 'DESP-');
             }
         });
 

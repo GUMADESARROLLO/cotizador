@@ -77,7 +77,7 @@ class PedidoSoftland
         $conf = 'config/softland.php';
 
         $campos = [
-            'PEDIDO' => [$numero, "consecutivo {$cfg['consecutivo']} (+1 al confirmar, con bloqueo)"],
+            'PEDIDO' => [$numero, 'consecutivo elegido en el pedido (+1 al enviar, con bloqueo)'],
             'ESTADO' => ['N', $fijo],
             'FECHA_PEDIDO' => [$fecha, 'fecha del pedido (calendario)'],
             'FECHA_PROMETIDA' => [$fecha, '= fecha del pedido'],
@@ -152,6 +152,13 @@ class PedidoSoftland
             'TIPO_CAMBIO' => [null, $fijo],
             'ES_FACTURA_REEMPLAZO' => ['N', $fijo],
             'PED_MOD_POST_AUTORIZ' => ['N', $fijo],
+            // Admiten NULL, pero Softland los llena (446 de 447 pedidos de F12; el NULL fue el 00007837).
+            'TASA_IMPOSITIVA_PORC' => [0, $fijo],
+            'TASA_CREE1_PORC' => [0, $fijo],
+            'TASA_CREE2_PORC' => [0, $fijo],
+            'TASA_GAN_OCASIONAL_PORC' => [0, $fijo],
+            'TOTAL_CONTRATO_AC' => [0, $fijo],
+            'CONTRATO_REVENTA' => ['N', $fijo],
             'NoteExistsFlag' => [0, $fijo],
             'RecordDate' => [$ahoraTxt, 'obligatorio · el trigger de auditoría lo repone con la hora del servidor'],
             'CreateDate' => [$ahoraTxt, 'obligatorio · el trigger de auditoría lo repone con la hora del servidor'],
@@ -197,8 +204,9 @@ class PedidoSoftland
                 'LOTE' => [$i['lote'] ?? null, 'lote elegido (sugerido: el que vence primero)'],
                 'LOCALIZACION' => [null, $fijo],
                 'ESTADO' => ['N', $fijo],
-                'PRECIO_UNITARIO' => [(float) $i['precio'], 'precio del nivel del cliente'],
-                'CANTIDAD_PEDIDA' => [(float) $i['cantidad'], 'cantidad del carrito'],
+                'PRECIO_UNITARIO' => [(float) $i['precio'], 'precio por caja (nivel del cliente o puesto a mano)'],
+                'CANTIDAD_PEDIDA' => [(float) $i['cantidad'], 'cantidad en cajas (puede llevar fracción)'],
+                'PORCENTAJE_SUGERIDO' => [0, $fijo],
                 'CANTIDAD_A_FACTURA' => [(float) $i['cantidad'], '= cantidad pedida'],
                 'CANTIDAD_FACTURADA' => [0, $fijo],
                 'CANTIDAD_RESERVADA' => [0, $fijo],

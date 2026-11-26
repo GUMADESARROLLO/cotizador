@@ -13,7 +13,7 @@
         <div class="mb-4 flex items-center justify-between gap-3 rounded-[20px] bg-white px-4 py-3 shadow-[0_0_0_2px_var(--color-cyan)]">
             <p class="min-w-0">
                 <span class="text-cyan-ink block text-[11px] font-extrabold tracking-[0.14em] uppercase">Modificando pedido</span>
-                <span class="num text-ink block text-[22px] leading-tight font-extrabold">{{ $editando->folio }}</span>
+                <span class="text-ink block leading-tight font-bold">Creado el <span class="num text-[18px] font-extrabold">{{ $editando->created_at->format('d/m/Y H:i') }}</span></span>
             </p>
             <form method="POST" action="{{ route('pedidos.cancelar-edicion') }}">
                 @csrf
@@ -41,7 +41,7 @@
                 <div class="group-list flex items-stretch">
                     {{-- Fecha: hoy por defecto; se puede poner otra (p. ej. armarlo hoy con fecha del lunes). --}}
                     <button type="button" data-fecha-trigger aria-haspopup="dialog" aria-label="Cambiar fecha del pedido"
-                            data-fecha="{{ $fecha->format('Y-m-d') }}" data-min="{{ $fechaMin->format('Y-m-d') }}" data-max="{{ $fechaMax->format('Y-m-d') }}"
+                            data-fecha="{{ $fecha->format('Y-m-d') }}" data-hoy="{{ today()->format('Y-m-d') }}" data-min="{{ $fechaMin->format('Y-m-d') }}" data-max="{{ $fechaMax->format('Y-m-d') }}"
                             class="pressable active:bg-mist flex min-w-0 flex-1 items-center gap-3 py-3 pr-2 pl-4 text-left">
                         <span class="bg-royal text-cyan grid size-9 shrink-0 place-items-center rounded-full" aria-hidden="true">
                             <svg viewBox="0 0 24 24" class="size-[18px]" fill="currentColor"><path d="M8 2a1 1 0 0 1 1 1v1h6V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm11 8H5v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8ZM6 6a1 1 0 0 0-1 1v1h14V7a1 1 0 0 0-1-1H6Z"/></svg>
@@ -50,11 +50,14 @@
                         <svg viewBox="0 0 24 24" class="text-royal size-4 shrink-0" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
                     </button>
                     {{-- Número tentativo (se asigna al enviar) y de qué consecutivo de Softland sale. --}}
-                    <a href="{{ route('softland.vista-previa') }}" title="Pedido Softland — Ver datos para Softland"
-                       class="pressable active:bg-mist border-line flex shrink-0 flex-col items-end justify-center border-l py-3 pr-4 pl-3 text-right">
+                    {{-- Toca → elegir el consecutivo (DESP-A, DESP-B…); el número cambia según el elegido. --}}
+                    <button type="button" data-consecutivo-trigger aria-haspopup="dialog" aria-label="Pedido Softland: cambiar consecutivo"
+                            class="pressable active:bg-mist border-line flex shrink-0 flex-col items-end justify-center border-l py-3 pr-4 pl-3 text-right">
                         <span class="num text-ink text-[22px] leading-tight font-extrabold whitespace-nowrap" data-numero-pedido>{{ $numeroPedido ? 'N.º '.$numeroPedido : '—' }}</span>
-                        <span class="text-label-2 text-[12px] whitespace-nowrap">Consecutivo <b class="text-ink">{{ $codigoConsecutivo }}</b></span>
-                    </a>
+                        <span class="text-label-2 flex items-center gap-1 text-[12px] whitespace-nowrap">Consecutivo <b class="text-ink" data-consecutivo-texto>{{ $codigoConsecutivo }}</b>
+                            <svg viewBox="0 0 24 24" class="text-royal size-3.5" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
+                        </span>
+                    </button>
                 </div>
             </section>
 
@@ -91,34 +94,46 @@
         </div>
     @endif
 
-    {{-- Calendario de la fecha del pedido (bottom sheet). Lo dibuja app.js. --}}
-    <dialog data-fecha-sheet class="lote-sheet" aria-labelledby="fecha-sheet-titulo">
+    @if (count($items))
+    {{-- Consecutivo de Softland del pedido (bottom sheet): los que empiezan con DESP-. --}}
+    <dialog data-consecutivo-sheet class="lote-sheet" aria-labelledby="consecutivo-sheet-titulo">
         <div class="sheet-panel" data-sheet-panel>
             <div class="flex cursor-grab touch-none flex-col items-center pt-2.5 pb-1" data-sheet-grab>
                 <span class="bg-silver h-[5px] w-10 rounded-full" aria-hidden="true"></span>
             </div>
             <header class="px-5 pt-2 pb-3" data-sheet-grab>
-                <p class="text-cyan-ink text-[11px] font-extrabold tracking-[0.14em] uppercase">Fecha del pedido</p>
-                <h2 id="fecha-sheet-titulo" class="text-ink mt-0.5 text-[17px] leading-snug font-bold first-letter:uppercase" data-cal-elegida></h2>
+                <p class="text-cyan-ink text-[11px] font-extrabold tracking-[0.14em] uppercase">Pedido Softland</p>
+                <h2 id="consecutivo-sheet-titulo" class="text-ink mt-0.5 text-[17px] leading-snug font-bold">Consecutivo del pedido</h2>
+                <p class="text-label-2 mt-1 text-[13px]">El número es tentativo: se asigna al enviar a Softland.</p>
             </header>
-            <div class="flex flex-wrap gap-2 px-5 pb-3" data-cal-rapidos></div>
-            <div class="border-line border-t px-3 pt-3">
-                <div class="mb-2 flex items-center justify-between px-2">
-                    <button type="button" data-cal-mes="-1" class="pressable text-royal grid size-11 place-items-center rounded-full disabled:text-label-3" aria-label="Mes anterior">
-                        <svg viewBox="0 0 24 24" class="size-6" fill="currentColor" aria-hidden="true"><path d="M15.7 4.3a1 1 0 0 1 0 1.4L9.41 12l6.3 6.3a1 1 0 0 1-1.42 1.4l-7-7a1 1 0 0 1 0-1.4l7-7a1 1 0 0 1 1.42 0Z"/></svg>
-                    </button>
-                    <p class="text-ink text-[17px] font-extrabold first-letter:uppercase" data-cal-titulo aria-live="polite"></p>
-                    <button type="button" data-cal-mes="1" class="pressable text-royal grid size-11 place-items-center rounded-full disabled:text-label-3" aria-label="Mes siguiente">
-                        <svg viewBox="0 0 24 24" class="size-6" fill="currentColor" aria-hidden="true"><path d="M8.3 4.3a1 1 0 0 1 1.4 0l7 7a1 1 0 0 1 0 1.4l-7 7a1 1 0 0 1-1.4-1.4l6.29-6.3-6.3-6.3a1 1 0 0 1 0-1.4Z"/></svg>
-                    </button>
-                </div>
-                <div class="grid grid-cols-7 text-center" data-cal-grid role="grid"></div>
-            </div>
-            <div class="px-5 pt-3" style="padding-bottom: max(16px, env(safe-area-inset-bottom))">
+            <ul class="border-line border-t" role="radiogroup" aria-label="Consecutivo">
+                @foreach ($consecutivos as $c)
+                    @php $sel = $c['codigo'] === $codigoConsecutivo; @endphp
+                    <li class="border-line border-b last:border-b-0">
+                        <button type="button" role="radio" aria-checked="{{ $sel ? 'true' : 'false' }}" data-consecutivo="{{ $c['codigo'] }}"
+                                class="lote-opcion pressable flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left">
+                            <span class="min-w-0 flex-1">
+                                <span class="num text-ink block text-[19px] font-extrabold">{{ $c['codigo'] }}</span>
+                                <span class="text-label-2 block text-[14px]">{{ $c['descripcion'] }}</span>
+                            </span>
+                            <span class="num text-ink shrink-0 text-[18px] font-bold">N.º {{ $c['siguiente'] }}</span>
+                            <span class="grid size-6 shrink-0 place-items-center rounded-full {{ $sel ? 'bg-royal text-white' : 'ring-line ring-2' }}" data-check aria-hidden="true">
+                                <svg viewBox="0 0 24 24" class="size-4 {{ $sel ? '' : 'hidden' }}" fill="currentColor"><path d="M9.55 17.6a1 1 0 0 1-.7-.3l-4.2-4.2a1 1 0 1 1 1.4-1.4l3.5 3.5 8.3-8.3a1 1 0 1 1 1.4 1.4l-9 9a1 1 0 0 1-.7.3Z"/></svg>
+                            </span>
+                        </button>
+                    </li>
+                @endforeach
+            </ul>
+            <div class="space-y-2 px-5 pt-3" style="padding-bottom: max(16px, env(safe-area-inset-bottom))">
+                <a href="{{ route('softland.vista-previa') }}" class="pressable text-royal bg-cyan-soft block w-full rounded-[14px] py-3.5 text-center text-[15px] font-extrabold tracking-[0.06em] uppercase">Ver datos para Softland</a>
                 <button type="button" data-sheet-cerrar class="pressable bg-mist text-royal w-full rounded-[14px] py-3.5 text-[15px] font-extrabold tracking-[0.06em] uppercase">Cancelar</button>
             </div>
         </div>
     </dialog>
+    @endif
+
+    {{-- Calendario de la fecha del pedido (bottom sheet). --}}
+    <x-calendario marca="data-fecha-sheet" titulo="Fecha del pedido" />
 
     {{-- Editar artículo (bottom sheet): cantidad, precio y lote en un solo lugar. Lo llena app.js. --}}
     <dialog data-articulo-sheet class="lote-sheet" aria-labelledby="articulo-sheet-titulo">

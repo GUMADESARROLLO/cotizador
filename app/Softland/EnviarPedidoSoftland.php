@@ -2,7 +2,6 @@
 
 namespace App\Softland;
 
-use App\Catalogo\Lotes;
 use App\Models\Pedido;
 use DomainException;
 use Illuminate\Database\ConnectionInterface;
@@ -23,7 +22,6 @@ class EnviarPedidoSoftland
     public function __construct(
         private ConnectionInterface $db,      // conexión SQL Server (Softland)
         private PedidoSoftland $preparador,   // arma encabezado y líneas
-        private Lotes $lotes,                 // revalidación de existencia por lote
         private array $config,                // config/softland.php
     ) {}
 
@@ -117,24 +115,24 @@ class EnviarPedidoSoftland
             throw new DomainException('El pedido no tiene artículos.');
         }
 
-        if ($pedido->fecha_pedido && $pedido->fecha_pedido->lt(today())) {
-            throw new DomainException('La fecha del pedido ('.fecha_larga($pedido->fecha_pedido).') ya pasó. Modifica el pedido para elegir otra fecha.');
-        }
-
-        $this->validarLotes($items);
+        // No se valida existencia: se pueden pedir artículos agotados o más de lo
+        // disponible en el lote (se completa con traslados antes de facturar).
 
         $e = $this->config['esquema'];
         $ahora = now();
 
-        return $this->db->transaction(function () use ($e, $items, $pedido, $ahora) {
+        // Consecutivo elegido para este pedido (DESP-A, DESP-B…).
+        $consecutivo = $pedido->consecutivo();
+
+        return $this->db->transaction(function () use ($e, $items, $pedido, $ahora, $consecutivo) {
             // 2. Consecutivo con bloqueo de fila: nadie más toma este número hasta el commit.
             $valor = $this->db->table($e.'.CONSECUTIVO_FA')
-                ->where('CODIGO_CONSECUTIVO', $this->config['consecutivo'])
+                ->where('CODIGO_CONSECUTIVO', $consecutivo)
                 ->lockForUpdate()
                 ->value('VALOR_CONSECUTIVO');
 
             if ($valor === null) {
-                throw new DomainException("No existe el consecutivo {$this->config['consecutivo']} en Softland.");
+                throw new DomainException("No existe el consecutivo {$consecutivo} en Softland.");
             }
 
             $numero = $this->siguienteLibre(trim($valor));
@@ -147,7 +145,7 @@ class EnviarPedidoSoftland
             // (El trigger EXCONSECUTIVO_FAIup repone RecordDate/UpdatedBy; NO se tocan
             // CreatedBy/CreateDate porque ese trigger rechaza cualquier cambio a ellas.)
             $this->db->table($e.'.CONSECUTIVO_FA')
-                ->where('CODIGO_CONSECUTIVO', $this->config['consecutivo'])
+                ->where('CODIGO_CONSECUTIVO', $consecutivo)
                 ->update([
                     'VALOR_CONSECUTIVO' => $numero,
                     'RecordDate' => $this->fecha($ahora->format('Y-m-d H:i:s.v')),
@@ -180,24 +178,6 @@ class EnviarPedidoSoftland
         }
 
         throw new DomainException('No se encontró un número de pedido libre en el consecutivo.');
-    }
-
-    /** Cada lote debe tener aún la cantidad pedida en la bodega. */
-    private function validarLotes(array $items): void
-    {
-        $lotes = $this->lotes->porArticulos(array_column($items, 'codigo'));
-
-        foreach ($items as $i) {
-            if (! $i['lote']) {
-                continue; // artículo sin control de lotes
-            }
-            $lote = collect($lotes[$i['codigo']] ?? [])->firstWhere('lote', $i['lote']);
-            // En cajas, con fracción (2,810 viales = 56.2 CJA); margen por redondeo a 8 decimales.
-            if (! $lote || $lote->disponible + 0.000001 < $i['cantidad']) {
-                $hay = $lote ? cantidad($lote->disponible) : '0';
-                throw new DomainException("El lote {$i['lote']} del artículo {$i['codigo']} ya no tiene existencia suficiente (hay {$hay}, se piden ".cantidad($i['cantidad']).').');
-            }
-        }
     }
 
     /**

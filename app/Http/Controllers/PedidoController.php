@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Catalogo\Catalogo;
 use App\Catalogo\Lotes;
+use App\Clientes\Cliente;
 use App\Clientes\Clientes;
 use App\Models\Pedido;
 use App\Pedidos\Carrito;
 use App\Pedidos\Linea;
+use App\Softland\ConsecutivoPedido;
 use App\Softland\EnviarPedidoSoftland;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,19 +20,31 @@ class PedidoController extends Controller
 {
     public function index(Request $request)
     {
+        $filtros = $request->validate([
+            'desde' => ['nullable', 'date_format:Y-m-d'],
+            'hasta' => ['nullable', 'date_format:Y-m-d'],
+        ]) + ['desde' => null, 'hasta' => null];
+        // Si vienen al revés, se ordenan.
+        if ($filtros['desde'] && $filtros['hasta'] && $filtros['desde'] > $filtros['hasta']) {
+            [$filtros['desde'], $filtros['hasta']] = [$filtros['hasta'], $filtros['desde']];
+        }
+
         $pedidos = Pedido::query()
+            // Pedidos creados en el rango (ambos días incluidos).
+            ->when($filtros['desde'], fn ($q, $d) => $q->whereDate('created_at', '>=', $d))
+            ->when($filtros['hasta'], fn ($q, $h) => $q->whereDate('created_at', '<=', $h))
             ->when($request->query('q'), fn ($q, $t) => $q->where(fn ($w) => $w
-                ->where('folio', 'like', "%{$t}%")
+                ->where('softland_pedido', 'like', "%{$t}%")
                 ->orWhere('cliente', 'like', "%{$t}%")
                 ->orWhere('cliente_codigo', $t)))
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
-        return view('pedidos.index', compact('pedidos'));
+        return view('pedidos.index', compact('pedidos', 'filtros'));
     }
 
-    public function show(Pedido $pedido, EnviarPedidoSoftland $envio)
+    public function show(Pedido $pedido, EnviarPedidoSoftland $envio, Clientes $clientes, ConsecutivoPedido $consecutivo)
     {
         // Si un envío quedó a medias, se resuelve consultando Softland (sin duplicar).
         try {
@@ -39,7 +53,45 @@ class PedidoController extends Controller
             Log::warning("Revisión de envío trabado {$pedido->folio}: ".$e->getMessage());
         }
 
-        return view('pedidos.show', ['pedido' => $pedido->load('items')]);
+        // Cliente como al crear el pedido: datos al día de Softland (crédito disponible,
+        // moroso…); si no se puede leer, los guardados con el pedido.
+        try {
+            $cliente = $pedido->cliente_codigo ? $clientes->encontrar($pedido->cliente_codigo) : null;
+        } catch (Throwable $e) {
+            Log::warning("Cliente del pedido {$pedido->id}: ".$e->getMessage());
+            $cliente = null;
+        }
+        $cliente ??= Cliente::fromArray([
+            'codigo' => (string) $pedido->cliente_codigo,
+            'nombre' => $pedido->cliente,
+            'direccion' => '',
+            'ruc' => (string) $pedido->cliente_ruc,
+            'vendedor' => '',
+            'moroso' => false,
+            'credito' => 0.0,
+            'saldo' => 0.0,
+            'disponible' => (float) $pedido->credito_disponible,
+            'condicionPago' => (string) $pedido->condicion_pago,
+            'nivelPrecio' => (string) $pedido->nivel_precio,
+            'monedaNivel' => $pedido->moneda ?? 'L',
+            'moneda' => $pedido->moneda ?? 'L',
+        ]);
+
+        // Número de Softland: el asignado; si aún no se envía, el tentativo (solo lectura).
+        $numeroTentativo = null;
+        if (! $pedido->softland_pedido) {
+            try {
+                $numeroTentativo = $consecutivo->siguiente($pedido->consecutivo());
+            } catch (Throwable $e) {
+                Log::warning('Consecutivo de pedido Softland: '.$e->getMessage());
+            }
+        }
+
+        return view('pedidos.show', [
+            'pedido' => $pedido->load('items'),
+            'cliente' => $cliente,
+            'numeroTentativo' => $numeroTentativo,
+        ]);
     }
 
     public function store(Request $request, Catalogo $catalogo, Lotes $lotes, Clientes $clientes, Carrito $carrito)
@@ -73,12 +125,14 @@ class PedidoController extends Controller
                 ->with('aviso', 'Agrega al menos un artículo.');
         }
 
-        // Fecha del pedido (calendario): no puede haber quedado en el pasado.
-        if ($carrito->fecha()->lt(today())) {
+        // Fecha del pedido (calendario): puede ser anterior a hoy, dentro del rango permitido.
+        if ($carrito->fecha()->lt(today()->subDays(config('softland.fecha_min_dias')))) {
             return redirect()->route('carrito.index')->withInput()
-                ->with('aviso', 'La fecha del pedido ('.fecha_larga($carrito->fecha()).') ya pasó. Elige otra.');
+                ->with('aviso', 'La fecha del pedido ('.fecha_larga($carrito->fecha()).') es demasiado antigua. Elige otra.');
         }
         $data['fecha_pedido'] = $carrito->fecha()->format('Y-m-d');
+        // Consecutivo de Softland elegido (null = el de la configuración, DESP-A).
+        $data['softland_consecutivo'] = $carrito->consecutivo();
 
         // Revalidar contra Softland: precio, existencia y el lote elegido.
         $items = $carrito->items();
@@ -209,17 +263,13 @@ class PedidoController extends Controller
             }
         }
 
-        // Su fecha, salvo que ya haya pasado (entonces hoy, y se avisa).
-        $fecha = $pedido->fecha_pedido && $pedido->fecha_pedido->gte(today()) ? $pedido->fecha_pedido : today();
-        if ($pedido->fecha_pedido && $pedido->fecha_pedido->lt(today())) {
-            $ajustados[] = 'fecha';
-        }
-        $carrito->editar($pedido->id, $pedido->notas, $fecha);
+        // Conserva su fecha (puede ser anterior a hoy).
+        $carrito->editar($pedido->id, $pedido->notas, $pedido->fecha_pedido ?? today(), $pedido->softland_consecutivo);
 
         return redirect()->route('carrito.index')
             ->with('aviso', $ajustados
-                ? "Modificando {$pedido->folio}: ".count($ajustados).' artículo(s) cambiaron de existencia, lote o precio. Revísalos.'
-                : "Modificando {$pedido->folio}.")
+                ? 'Modificando el pedido: '.count($ajustados).' artículo(s) cambiaron de existencia, lote o precio. Revísalos.'
+                : 'Modificando el pedido.')
             ->with('ajustados', $ajustados);
     }
 

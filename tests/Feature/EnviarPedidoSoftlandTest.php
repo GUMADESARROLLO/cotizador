@@ -64,7 +64,7 @@ class EnviarPedidoSoftlandTest extends TestCase
         $this->lotes(new Lote('H25124', 1700, '2027-06-30'));
         $this->app->bind(PedidoSoftland::class, fn () => new PedidoSoftland(DB::connection(), config('softland')));
         $this->app->bind(EnviarPedidoSoftland::class, fn ($app) => new EnviarPedidoSoftland(
-            DB::connection(), $app->make(PedidoSoftland::class), $app->make(Lotes::class), config('softland'),
+            DB::connection(), $app->make(PedidoSoftland::class), config('softland'),
         ));
     }
 
@@ -125,25 +125,15 @@ class EnviarPedidoSoftlandTest extends TestCase
         }
     }
 
-    public function test_lote_sin_existencia_no_inserta_nada_y_se_puede_reintentar(): void
+    public function test_lote_sin_existencia_suficiente_se_envia_igual(): void
     {
+        // Se completa con traslados antes de facturar: Softland recibe la cantidad pedida.
         $this->lotes(new Lote('H25124', 500, '2027-06-30'));
         $p = $this->pedido(1700);
 
-        try {
-            $this->enviar($p);
-            $this->fail('Debió rechazarse.');
-        } catch (DomainException $e) {
-            $this->assertStringContainsString('El lote H25124 del artículo 11724013 ya no tiene existencia suficiente (hay 500, se piden 1,700)', $e->getMessage());
-        }
-
-        $this->assertSame(0, DB::table('PEDIDO')->count());
-        $this->assertSame('00007835', DB::table('CONSECUTIVO_FA')->value('VALOR_CONSECUTIVO'));
-        $this->assertSame(Pedido::SOFTLAND_ERROR, $p->fresh()->softland_estado);
-
-        // Vuelve la existencia: el reintento funciona.
-        $this->lotes(new Lote('H25124', 1700, '2027-06-30'));
-        $this->assertSame('00007836', $this->enviar($p->fresh()));
+        $this->assertSame('00007836', $this->enviar($p));
+        $this->assertEquals(1700, DB::table('PEDIDO_LINEA')->value('CANTIDAD_PEDIDA'));
+        $this->assertSame('H25124', DB::table('PEDIDO_LINEA')->value('LOTE'));
     }
 
     public function test_si_falla_una_insercion_se_revierte_todo(): void
@@ -200,7 +190,7 @@ class EnviarPedidoSoftlandTest extends TestCase
         $this->get(route('pedidos.show', $p))->assertOk()
             ->assertSee('No se pudo enviar a Softland')
             ->assertSee('El envío anterior se interrumpió y el pedido no llegó a Softland')
-            ->assertSee('Reintentar envío');
+            ->assertSee('Reintentar envío a Softland');
         $this->assertSame(Pedido::SOFTLAND_ERROR, $p->fresh()->softland_estado);
 
         $this->assertSame('00007836', $this->enviar($p->fresh()));
@@ -228,7 +218,8 @@ class EnviarPedidoSoftlandTest extends TestCase
 
         $this->get(route('pedidos.show', $p))->assertOk()
             ->assertSee('data-softland-form', false)
-            ->assertSee('Enviar a Softland');
+            ->assertSee('Enviar a Softland')
+            ->assertSee('se asigna al enviar'); // número tentativo
         $this->get('/pedidos')->assertSee('Sin enviar a Softland');
 
         $this->post(route('pedidos.softland', $p))
@@ -236,7 +227,7 @@ class EnviarPedidoSoftlandTest extends TestCase
             ->assertSessionHas('softland_ok', '00007836');
 
         $this->get(route('pedidos.show', $p))->assertOk()
-            ->assertSee('En Softland')
+            ->assertSee('· enviado')
             ->assertSee('N.º 00007836')
             ->assertDontSee('data-softland-form', false);
         $this->get('/pedidos')->assertSee('Softland');

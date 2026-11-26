@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Catalogo\Catalogo;
 use App\Catalogo\DemoCatalogo;
+use App\Models\Pedido;
 use App\Softland\ConsecutivoPedido;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -55,9 +56,22 @@ class ConsecutivoPedidoTest extends TestCase
                 return 'DESP-A';
             }
 
-            public function siguiente(): ?string
+            public function siguiente(?string $codigo = null): ?string
             {
-                return '00007836';
+                return $this->disponibles()[$codigo ?? 'DESP-A']['siguiente'] ?? null;
+            }
+
+            public function disponibles(): array
+            {
+                return [
+                    'DESP-A' => ['codigo' => 'DESP-A', 'descripcion' => 'Despacho Serie A', 'siguiente' => '00007836'],
+                    'DESP-B' => ['codigo' => 'DESP-B', 'descripcion' => 'Despacho Serie-B', 'siguiente' => '21092030'],
+                ];
+            }
+
+            public function permitido(string $codigo): bool
+            {
+                return str_starts_with($codigo, 'DESP-');
             }
         });
 
@@ -68,6 +82,23 @@ class ConsecutivoPedidoTest extends TestCase
         $this->get('/pedido')->assertOk()
             ->assertSee('Pedido Softland')
             ->assertSee('N.º 00007836')
-            ->assertSee('Consecutivo <b class="text-ink">DESP-A</b>', false);
+            ->assertSee('data-consecutivo-texto>DESP-A</b>', false)
+            ->assertSee('data-consecutivo="DESP-B"', false); // se puede elegir otro DESP-
+
+        // Elegir DESP-B: cambia el número tentativo y se guarda con el pedido.
+        $this->postJson('/pedido/consecutivo', ['consecutivo' => 'DESP-B'])
+            ->assertOk()->assertJson(['consecutivo' => 'DESP-B', 'numero' => '21092030']);
+        $this->get('/pedido')->assertSee('N.º 21092030')->assertSee('data-consecutivo-texto>DESP-B</b>', false);
+
+        // Solo los DESP-.
+        $this->postJson('/pedido/consecutivo', ['consecutivo' => 'PTV7'])->assertStatus(422);
+
+        $this->post('/pedidos', []);
+        $p = Pedido::sole();
+        $this->assertSame(['DESP-B', 'DESP-B'], [$p->softland_consecutivo, $p->consecutivo()]);
+
+        // Al modificarlo, vuelve con su consecutivo.
+        $this->post(route('pedidos.editar', $p));
+        $this->get('/pedido')->assertSee('data-consecutivo-texto>DESP-B</b>', false);
     }
 }

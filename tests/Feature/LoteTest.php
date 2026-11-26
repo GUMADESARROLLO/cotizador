@@ -44,27 +44,23 @@ class LoteTest extends TestCase
         $this->app->instance(Lotes::class, new DemoLotes(lotes: $lotes));
     }
 
-    public function test_sugiere_el_que_vence_primero_y_limita_a_su_existencia(): void
+    public function test_sugiere_el_que_vence_primero_y_avisa_si_excede(): void
     {
         $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 5000])
             ->assertOk()
-            ->assertJson(['cantidad' => 3000, 'maximo' => 3000, 'ajustado' => true, 'lote' => ['lote' => 'F411250901']])
-            ->assertJsonPath('message', 'Solo hay 3,000 CJA disponibles en el lote F411250901.');
+            ->assertJson(['cantidad' => 5000, 'maximo' => 3000, 'ajustado' => false, 'excede' => true, 'lote' => ['lote' => 'F411250901']])
+            ->assertJsonPath('message', 'Hay 3,000 CJA en bodega 006 (lote F411250901); se pedirá igual.');
     }
 
     public function test_cambiar_de_lote_a_mano(): void
     {
-        $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 3000]);
+        $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 3500]);
 
+        // Con el lote grande alcanza; con el chico se mantiene la cantidad y solo se avisa.
         $this->postJson('/pedido/items/lote', ['codigo' => '11715061', 'lote' => 'F411251101'])
-            ->assertOk()->assertJson(['cantidad' => 3000, 'maximo' => 3700, 'lote' => ['lote' => 'F411251101', 'vence' => '2027-11-24']]);
-
-        // Con el lote elegido, ya se puede pedir hasta su existencia (3,700)…
-        $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 3500])->assertJson(['cantidad' => 3500, 'ajustado' => false]);
-
-        // …y al volver al lote chico, la cantidad se ajusta a lo que tiene.
+            ->assertOk()->assertJson(['cantidad' => 3500, 'maximo' => 3700, 'excede' => false, 'lote' => ['lote' => 'F411251101', 'vence' => '2027-11-24']]);
         $this->postJson('/pedido/items/lote', ['codigo' => '11715061', 'lote' => 'F411250901'])
-            ->assertJson(['cantidad' => 3000, 'ajustado' => true]);
+            ->assertJson(['cantidad' => 3500, 'excede' => true]);
     }
 
     public function test_lote_inexistente_se_rechaza(): void
@@ -101,18 +97,18 @@ class LoteTest extends TestCase
 
     public function test_el_pedido_guarda_el_lote_y_se_revalida_al_confirmar(): void
     {
-        $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 3500]); // se ajusta a 3,000 (lote sugerido)
-        $this->postJson('/pedido/items/lote', ['codigo' => '11715061', 'lote' => 'F411251101']);
         $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 3500]);
+        $this->postJson('/pedido/items/lote', ['codigo' => '11715061', 'lote' => 'F411251101']);
 
         // Entre tanto, el lote elegido se agotó: al confirmar se cambia al sugerido y se pide revisar.
         $this->lotes(['11715061' => [new Lote('F411250901', 3000, '2027-09-01')]]);
         $this->post('/pedidos', [])->assertRedirect(route('carrito.index'))->assertSessionHas('ajustados', ['11715061']);
         $this->assertSame(0, Pedido::count());
 
+        // La cantidad no se recorta (se completa con traslados).
         $this->post('/pedidos', [])->assertRedirect();
         $item = Pedido::sole()->items()->sole();
-        $this->assertSame(['F411250901', 3000.0], [$item->lote, $item->cantidad]);
+        $this->assertSame(['F411250901', 3500.0], [$item->lote, $item->cantidad]);
         $this->assertSame('2027-09-01', substr((string) $item->lote_vence, 0, 10));
     }
 

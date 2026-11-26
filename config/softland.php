@@ -50,8 +50,10 @@ return [
     |   CONDICION_PAGO, NIVEL_PRECIO (y con él la moneda: MONEDA_NIVEL L/D).
     */
 
-    // Hasta cuántos días adelante se puede poner la fecha del pedido (calendario).
-    'fecha_max_dias' => 60,
+    // Rango de la fecha del pedido en el calendario: se admiten fechas
+    // anteriores (pedidos que se ingresan después) y posteriores a hoy.
+    'fecha_min_dias' => 60, // días hacia atrás
+    'fecha_max_dias' => 60, // días hacia adelante
 
     // Minutos tras los que un envío que quedó en "enviando" se revisa contra Softland.
     'envio_trabado_minutos' => 2,
@@ -59,7 +61,11 @@ return [
     // Símbolo por moneda de Softland (L = local, D = dólar).
     'monedas' => ['L' => 'C$', 'D' => 'US$'],
 
-    // Consecutivo de pedidos de CMOREIRA (umk.CONSECUFA_USUARIO).
+    // Consecutivo de pedidos por defecto (el de CMOREIRA en umk.CONSECUFA_USUARIO).
     'consecutivo' => 'DESP-A',
+
+    // Al crear o modificar un pedido se puede elegir otro consecutivo: para F12,
+    // cualquiera de umk.CONSECUTIVO_FA que empiece con este prefijo (DESP-A, DESP-B, DESP-C…).
+    'consecutivos_prefijo' => 'DESP-',
 
 ];

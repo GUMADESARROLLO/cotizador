@@ -44,7 +44,7 @@ class SoftlandController extends Controller
 
         try {
             $preparado = $pedido->preparar(
-                numero: $consecutivo->siguiente() ?? '—',
+                numero: $consecutivo->siguiente($carrito->consecutivo()) ?? '—',
                 clienteCodigo: $carrito->cliente()->codigo,
                 items: $carrito->items(),
                 ahora: now(),

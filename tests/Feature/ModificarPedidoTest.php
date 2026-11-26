@@ -59,7 +59,7 @@ class ModificarPedidoTest extends TestCase
         // El carrito trae cliente, artículo, el lote que tenía y las observaciones.
         $this->get('/pedido')->assertOk()
             ->assertSee('Modificando pedido')
-            ->assertSee($p->folio)
+            ->assertSee($p->created_at->format('d/m/Y H:i'))
             ->assertSee('Guardar cambios')
             ->assertSee('ORDEN DE COMPRA No. 1')
             ->assertSee('Lote <span class="num text-ink text-[15px] font-bold">LA-2</span>', false);

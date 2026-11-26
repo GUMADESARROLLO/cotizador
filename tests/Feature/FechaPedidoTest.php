@@ -60,12 +60,18 @@ class FechaPedidoTest extends TestCase
         $this->get('/pedido')->assertSee('Lun 30 nov 2026');
     }
 
-    public function test_no_acepta_fechas_pasadas_ni_fuera_de_rango(): void
+    public function test_acepta_fechas_anteriores_dentro_del_rango(): void
     {
-        $this->postJson('/pedido/fecha', ['fecha' => '2026-11-25'])->assertStatus(422)
-            ->assertJsonPath('errors.fecha.0', 'La fecha del pedido no puede ser anterior a hoy.');
+        // Ingresar hoy un pedido de ayer (o de semanas atrás) es lo normal.
+        $this->postJson('/pedido/fecha', ['fecha' => '2026-11-25'])->assertOk()->assertJson(['corta' => 'Mié 25 nov 2026']);
+        $this->postJson('/pedido/fecha', ['fecha' => '2026-09-27'])->assertOk(); // hoy − 60 días
+
+        $this->postJson('/pedido/fecha', ['fecha' => '2026-09-26'])->assertStatus(422)
+            ->assertJsonPath('errors.fecha.0', 'La fecha del pedido puede ser como mínimo el domingo 27 de septiembre de 2026.');
         $this->postJson('/pedido/fecha', ['fecha' => '2027-03-01'])->assertStatus(422);
         $this->postJson('/pedido/fecha', ['fecha' => '30/11/2026'])->assertStatus(422);
+
+        $this->get('/pedido')->assertSee('data-min="2026-09-27"', false)->assertSee('data-hoy="2026-11-26"', false);
     }
 
     public function test_se_guarda_con_el_pedido_y_se_carga_al_modificar(): void
@@ -76,7 +82,7 @@ class FechaPedidoTest extends TestCase
         $p = Pedido::sole();
         $this->assertSame('2026-11-30', $p->fecha_pedido->format('Y-m-d'));
         // (la mayúscula inicial la pone el CSS)
-        $this->get(route('pedidos.show', $p))->assertSee('lunes 30 de noviembre de 2026')->assertSee('Creado');
+        $this->get(route('pedidos.show', $p))->assertSee('Lun 30 nov 2026')->assertSee('Creado');
         $this->get('/pedidos')->assertSee('30/11/2026');
 
         // El siguiente pedido vuelve a empezar con hoy.
@@ -90,13 +96,17 @@ class FechaPedidoTest extends TestCase
         $this->get('/pedido')->assertSee('data-fecha="2026-11-30"', false);
     }
 
-    public function test_si_la_fecha_quedo_en_el_pasado_pide_otra(): void
+    public function test_pedido_con_fecha_anterior_se_guarda_y_la_conserva_al_modificar(): void
     {
-        $this->postJson('/pedido/fecha', ['fecha' => '2026-11-27']);
-        Carbon::setTestNow('2026-11-28 09:00:00'); // se dejó el carrito abierto
+        $this->postJson('/pedido/fecha', ['fecha' => '2026-11-24']);
+        $this->post('/pedidos', [])->assertRedirect();
 
-        $this->post('/pedidos', [])->assertRedirect(route('carrito.index'))->assertSessionHas('aviso');
-        $this->assertSame(0, Pedido::count());
+        $p = Pedido::sole();
+        $this->assertSame('2026-11-24', $p->fecha_pedido->format('Y-m-d'));
+
+        Carbon::setTestNow('2026-11-28 09:00:00'); // se modifica días después
+        $this->post(route('pedidos.editar', $p))->assertSessionHas('ajustados', []);
+        $this->get('/pedido')->assertSee('data-fecha="2026-11-24"', false);
     }
 
     public function test_softland_usa_la_fecha_elegida_y_la_de_creacion_donde_corresponde(): void

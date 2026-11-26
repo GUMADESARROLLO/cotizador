@@ -9,6 +9,31 @@
         </div>
     @endif
 
+    {{-- Últimos 3 clientes con pedido: se eligen de un toque, sin buscarlos. --}}
+    @if (count($recientes))
+        <section class="mb-4" aria-label="Clientes recientes">
+            <p class="section-label">Recientes</p>
+            <ul class="group-list">
+                @foreach ($recientes as $r)
+                    <li>
+                        <form method="POST" action="{{ route('clientes.seleccionar') }}">
+                            @csrf
+                            <input type="hidden" name="codigo" value="{{ $r['codigo'] }}">
+                            <button class="pressable active:bg-mist flex min-h-14 w-full items-center gap-3 px-4 py-3 text-left">
+                                <span class="num text-royal shrink-0 text-[17px] font-extrabold">{{ $r['codigo'] }}</span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="text-ink block truncate font-semibold">{{ $r['nombre'] }}</span>
+                                    <span class="text-label-2 block text-[12px]">Último pedido {{ $r['fecha']->format('d/m/Y H:i') }}</span>
+                                </span>
+                                <svg viewBox="0 0 24 24" class="text-label-3 size-5 shrink-0" fill="currentColor" aria-hidden="true"><path d="M8.3 4.3a1 1 0 0 1 1.4 0l7 7a1 1 0 0 1 0 1.4l-7 7a1 1 0 0 1-1.4-1.4l6.29-6.3-6.3-6.3a1 1 0 0 1 0-1.4Z"/></svg>
+                            </button>
+                        </form>
+                    </li>
+                @endforeach
+            </ul>
+        </section>
+    @endif
+
     <form role="search" action="{{ route('clientes.index') }}" data-search
           data-endpoint="{{ route('clientes.buscar') }}"
           class="bg-royal sticky z-20 -mx-4 px-4 pt-1 pb-4" style="top: calc(env(safe-area-inset-top) + 60px)">
