@@ -1,0 +1,359 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+/*
+ * Línea gráfica Unimark 20 años (compartida con MonitorLoteria y Tombola):
+ * blanco arriba con el logo, franja azul rey con ondas cian/blancas abajo.
+ */
+@theme {
+    /* Paleta de marca */
+    --color-paper: #ffffff;
+    --color-mist: #f2f5fa;
+    --color-navy: #1b2766;
+    --color-royal: #2b3b9e;
+    --color-royal-2: #3446b3;
+    --color-cyan: #29b6e8;
+    --color-cyan-ink: #0a76a8;
+    --color-cyan-soft: #e6f6fd;
+    --color-silver: #c4ccd8;
+    --color-ink: #15204f;
+    --color-ink-soft: #4a5878;
+    --color-on-royal-soft: #cdd6f5;
+    --color-line: #dde3ee;
+    --color-danger: #c42b3a;
+    --color-danger-soft: #fdecee;
+    --color-warn: #a34d00;
+    --color-warn-soft: #fff1dc;
+
+    /* Alias semánticos usados por las vistas */
+    --color-bg: var(--color-mist);
+    --color-surface: var(--color-paper);
+    --color-fill: #e9eef6;
+    --color-label: var(--color-ink);
+    --color-label-2: var(--color-ink-soft);
+    --color-label-3: #a8b2c6;
+    --color-separator: var(--color-line);
+    --color-tint: var(--color-royal);
+    --color-tint-soft: rgb(43 59 158 / 0.1);
+
+    --font-sans: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
+    --font-num: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+
+    /* Críticamente amortiguada: asienta sin rebote */
+    --ease-fluid: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    --text-large-title: 2.25rem;
+    --text-large-title--line-height: 0.98;
+    --text-large-title--letter-spacing: -0.03em;
+    --text-title: 1.375rem;
+    --text-title--line-height: 1.2;
+    --text-title--letter-spacing: -0.015em;
+    --text-body: 1.0625rem;
+    --text-body--line-height: 1.3;
+    --text-sub: 0.9375rem;
+    --text-sub--line-height: 1.35;
+    --text-foot: 0.8125rem;
+    --text-foot--line-height: 1.38;
+    --text-cap: 0.6875rem;
+    --text-cap--line-height: 1.2;
+    --text-cap--letter-spacing: 0.02em;
+}
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+        color-scheme: light;
+    }
+
+    body {
+        @apply bg-paper text-label font-sans text-body antialiased;
+    }
+
+    input,
+    textarea,
+    button {
+        font: inherit;
+    }
+
+    /* Evita el zoom automático de iOS: los campos no bajan de 16px. */
+    input,
+    textarea {
+        font-size: max(1rem, 1em);
+    }
+
+    :focus-visible {
+        outline: 3px solid var(--color-cyan);
+        outline-offset: 2px;
+        border-radius: 8px;
+    }
+}
+
+/* Respuesta al presionar (pointer-down), instantánea. */
+@utility pressable {
+    transition: transform 100ms ease-out, opacity 100ms ease-out, background-color 150ms ease-out;
+    touch-action: manipulation;
+    user-select: none;
+    &:active {
+        transform: scale(0.97);
+        opacity: 0.8;
+    }
+}
+
+@utility container-x {
+    width: 100%;
+    max-width: 48rem;
+    margin-inline: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+@utility pb-safe-bar {
+    /* espacio para la barra de pestañas + zona segura del iPhone */
+    padding-bottom: calc(env(safe-area-inset-bottom) + 6.5rem);
+}
+
+/* Cifras de marca: condensada y tabular */
+@utility num {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+@layer components {
+    /* ---------- Barras: material blanco translúcido ---------- */
+    .material-bar {
+        background: rgb(255 255 255 / 0.88);
+        -webkit-backdrop-filter: blur(14px) saturate(160%);
+        backdrop-filter: blur(14px) saturate(160%);
+    }
+
+    .top-bar {
+        background: rgb(255 255 255 / 0.88);
+        -webkit-backdrop-filter: blur(14px) saturate(160%);
+        backdrop-filter: blur(14px) saturate(160%);
+        border-bottom: 1px solid var(--color-line);
+    }
+
+    /* ---------- Encabezado blanco ---------- */
+    .hero {
+        background: var(--color-paper);
+    }
+    .hero-title {
+        margin: 0;
+        text-wrap: balance;
+        color: var(--color-royal);
+        font: 900 clamp(32px, 7vw, 52px) / 0.95 var(--font-display);
+        letter-spacing: -0.03em;
+    }
+    .hero-slogan {
+        margin: 6px 0 0;
+        color: var(--color-navy);
+        font: 700 clamp(15px, 2.2vw, 19px) / 1.2 var(--font-display);
+        letter-spacing: -0.01em;
+    }
+
+    /* ---------- Franja azul ---------- */
+    .band {
+        position: relative;
+        isolation: isolate;
+        background: var(--color-royal);
+        color: #fff;
+    }
+    .band::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background: linear-gradient(115deg, transparent 0 55%, var(--color-royal-2) 55% 100%);
+        opacity: 0.55;
+    }
+    .band-edge {
+        display: block;
+        width: 100%;
+        height: clamp(26px, 6vw, 64px);
+        margin-bottom: -1px;
+        background: var(--color-paper);
+    }
+
+    /* ---------- Listas agrupadas (tarjetas blancas sobre la franja) ---------- */
+    .group-list {
+        @apply bg-surface text-label overflow-hidden rounded-[20px];
+        box-shadow: 0 30px 60px -30px rgb(9 16 56 / 0.6);
+    }
+    /* Separador fino con sangría de 16px */
+    .group-list > * + * {
+        position: relative;
+    }
+    .group-list > * + *::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 1rem;
+        right: 0;
+        height: 1px;
+        background: var(--color-separator);
+    }
+
+    .section-label {
+        @apply px-1 pb-2;
+        color: var(--color-on-royal-soft);
+        font: 800 12px / 1 var(--font-display);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    /* ---------- Botones ---------- */
+    .btn-primary {
+        @apply pressable flex w-full items-center justify-center gap-2 rounded-[14px] px-6;
+        min-height: 56px;
+        background: var(--color-cyan);
+        color: var(--color-navy);
+        font: 800 16px / 1 var(--font-display);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        box-shadow: 0 16px 36px -16px rgb(41 182 232 / 0.9), inset 0 -3px 0 rgb(10 118 168 / 0.35);
+    }
+    .btn-primary:hover:not(:disabled) {
+        background: #48c3ef;
+    }
+    .btn-primary:disabled {
+        background: rgb(255 255 255 / 0.14);
+        color: var(--color-on-royal-soft);
+        box-shadow: none;
+    }
+
+    .stepper-btn {
+        @apply pressable text-royal grid size-11 shrink-0 place-items-center rounded-full;
+    }
+    .stepper-btn:disabled {
+        @apply text-label-3;
+        transform: none;
+        opacity: 1;
+    }
+
+    .badge {
+        @apply text-cap inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-bold;
+    }
+
+    .tabular {
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* Precio / total de marca */
+    .price {
+        font: 800 1.375rem / 1 var(--font-num);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
+        color: var(--color-ink);
+    }
+
+    /* Estados vacíos sobre la franja azul */
+    .empty-icon {
+        @apply mb-4 grid size-16 place-items-center rounded-full;
+        background: rgb(255 255 255 / 0.12);
+        color: var(--color-cyan);
+        box-shadow: 0 0 0 4px rgb(41 182 232 / 0.2);
+    }
+
+    /* ---------- Barra superior: título compacto aparece al desplazar ---------- */
+    [data-scroll-edge] [data-compact-title] {
+        opacity: 0;
+        transition: opacity 150ms ease;
+    }
+    [data-scroll-edge].is-scrolled [data-compact-title] {
+        opacity: 1;
+    }
+
+    /* Pie con ondas */
+    .foot-links li + li {
+        border-left: 1px solid rgb(255 255 255 / 0.35);
+        margin-left: 12px;
+        padding-left: 12px;
+    }
+
+    .toast {
+        transition: opacity 200ms ease, transform 300ms var(--ease-fluid);
+    }
+    .toast[hidden] {
+        display: block;
+        opacity: 0;
+        transform: translate(-50%, -8px) scale(0.96);
+        pointer-events: none;
+    }
+
+    .row-leaving {
+        opacity: 0;
+        transform: translateX(-12px);
+        transition: opacity 200ms ease, transform 200ms ease;
+    }
+
+    .animate-card-in {
+        animation: card-in 500ms var(--ease-fluid) both;
+    }
+}
+
+@keyframes card-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition-duration: 1ms !important;
+        animation-duration: 1ms !important;
+    }
+    .pressable:active {
+        transform: none;
+    }
+    .toast[hidden],
+    .row-leaving {
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    .material-bar,
+    .top-bar {
+        background: var(--color-paper);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+@media (prefers-contrast: more) {
+    :root {
+        --color-line: #8b97ae;
+        --color-ink-soft: #2c3756;
+        --color-on-royal-soft: #ffffff;
+    }
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    body,
+    .band {
+        background: white !important;
+        color: black;
+    }
+    .band::before,
+    .band-edge {
+        display: none;
+    }
+    .group-list {
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+}
