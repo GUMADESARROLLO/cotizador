@@ -17,7 +17,7 @@ class SqlServerCatalogo implements Catalogo
 {
     /**
      * @param  array{codigo:string,descripcion:string,unidad:string,precio:string,existencia:string}  $columnas
-     * @param  array{table:?string,articulo:string,cantidad:string,bodega:string,excluir:list<string>}|null  $stock
+     * @param  array{table:?string,articulo:string,cantidad:string,bodega:string,incluir?:list<string>,excluir?:list<string>}|null  $stock
      */
     public function __construct(
         private ConnectionInterface $db,
@@ -28,6 +28,8 @@ class SqlServerCatalogo implements Catalogo
         private ?array $stock = null,
         /** @var array{table:?string,articulo:string,precio:string,nivel_columna:string,nivel:string,where_raw:?string}|null */
         private ?array $precio = null,
+        // Condición "tiene precio en el nivel" (alias "p"), p. ej. "p.precio > 0".
+        private ?string $conPrecioRaw = null,
     ) {}
 
     public function buscar(string $termino, ?int $limite = null): array
@@ -38,10 +40,37 @@ class SqlServerCatalogo implements Catalogo
         }
 
         $codigo = $this->col('codigo');
-        $descripcion = $this->col('descripcion');
-        $query = $this->base();
+        $query = $this->filtrar($this->base(), $termino);
 
-        // Cada palabra debe aparecer en el código o en la descripción.
+        // Coincidencia exacta de código primero, luego por descripción.
+        $query->orderByRaw("CASE WHEN {$codigo} = ? THEN 0 ELSE 1 END", [$termino])
+            ->orderByRaw($this->col('descripcion'));
+
+        return $query->limit($limite ?? $this->limite)
+            ->get()
+            ->map(Articulo::fromRow(...))
+            ->all();
+    }
+
+    public function contarSinPrecio(string $termino): int
+    {
+        $termino = trim($termino);
+        if ($termino === '' || ! $this->conPrecioRaw) {
+            return 0;
+        }
+
+        // Mismos artículos de la búsqueda, pero solo los que NO tienen precio en el nivel.
+        return $this->filtrar($this->base(conPrecio: false), $termino)
+            ->whereRaw("(p.precio IS NULL OR NOT ({$this->conPrecioRaw}))")
+            ->count();
+    }
+
+    /** Cada palabra debe aparecer en el código o en la descripción. */
+    private function filtrar(Builder $query, string $termino): Builder
+    {
+        $codigo = $this->col('codigo');
+        $descripcion = $this->col('descripcion');
+
         foreach (SqlLike::palabras($termino) as $palabra) {
             $like = SqlLike::contiene($palabra);
             $query->where(function (Builder $q) use ($codigo, $descripcion, $like) {
@@ -50,14 +79,7 @@ class SqlServerCatalogo implements Catalogo
             });
         }
 
-        // Coincidencia exacta de código primero, luego por descripción.
-        $query->orderByRaw("CASE WHEN {$codigo} = ? THEN 0 ELSE 1 END", [$termino])
-            ->orderByRaw($descripcion);
-
-        return $query->limit($limite ?? $this->limite)
-            ->get()
-            ->map(Articulo::fromRow(...))
-            ->all();
+        return $query;
     }
 
     public function encontrar(string $codigo): ?Articulo
@@ -75,15 +97,22 @@ class SqlServerCatalogo implements Catalogo
             return [];
         }
 
-        return $this->base()
-            ->whereIn('a.'.$this->columnas['codigo'], $codigos)
-            ->get()
-            ->map(Articulo::fromRow(...))
-            ->keyBy('codigo')
-            ->all();
+        // SQL Server admite como máximo 2,100 parámetros por consulta: se consulta por bloques.
+        $resultado = [];
+        foreach (array_chunk($codigos, 1000) as $bloque) {
+            $this->base()
+                ->whereIn('a.'.$this->columnas['codigo'], $bloque)
+                ->get()
+                ->each(function ($row) use (&$resultado) {
+                    $a = Articulo::fromRow($row);
+                    $resultado[$a->codigo] = $a;
+                });
+        }
+
+        return $resultado;
     }
 
-    private function base(): Builder
+    private function base(bool $conPrecio = true): Builder
     {
         $c = $this->columnas;
 
@@ -96,12 +125,18 @@ class SqlServerCatalogo implements Catalogo
         if ($this->precio['table'] ?? null) {
             // Precio del nivel configurado (alias "p"), uno por artículo.
             $p = $this->precio;
-            $sub = $this->db->table($p['table'])
-                ->select($p['articulo'].' as articulo')
-                ->selectRaw('MAX('.$this->wrap($p['precio']).') as precio')
-                ->where($p['nivel_columna'], $p['nivel'])
+            $sub = $this->db->table($p['table'].' as ap')
+                ->select('ap.'.$p['articulo'].' as articulo')
+                ->selectRaw('MAX('.$this->wrap('ap.'.$p['precio']).') as precio')
+                ->where('ap.'.$p['nivel_columna'], $p['nivel'])
+                // Versión de la lista de precios (alias "vn"), como en Softland.
+                ->when($p['version_table'] ?? null, fn (Builder $q, $vt) => $q->join($vt.' as vn', function ($j) {
+                    $j->on('vn.NIVEL_PRECIO', '=', 'ap.NIVEL_PRECIO')
+                        ->on('vn.MONEDA', '=', 'ap.MONEDA')
+                        ->on('vn.VERSION', '=', 'ap.VERSION');
+                }))
                 ->when($p['where_raw'] ?? null, fn (Builder $q, $raw) => $q->whereRaw($raw))
-                ->groupBy($p['articulo']);
+                ->groupBy('ap.'.$p['articulo']);
 
             $query->leftJoinSub($sub, 'p', fn ($j) => $j->whereRaw($this->unir('p')))
                 ->addSelect('p.precio as precio');
@@ -114,7 +149,11 @@ class SqlServerCatalogo implements Catalogo
             $sub = $this->db->table($s['table'])
                 ->select($s['articulo'].' as articulo')
                 ->selectRaw('SUM('.$this->wrap($s['cantidad']).') as cantidad')
-                ->when($s['excluir'], fn (Builder $q, $excluir) => $q->whereNotIn($s['bodega'], $excluir))
+                ->when(
+                    $s['incluir'] ?? [],
+                    fn (Builder $q, $incluir) => $q->whereIn($s['bodega'], $incluir),
+                    fn (Builder $q) => $q->when($s['excluir'] ?? [], fn (Builder $q, $excluir) => $q->whereNotIn($s['bodega'], $excluir)),
+                )
                 ->groupBy($s['articulo']);
 
             $query->leftJoinSub($sub, 's', fn ($j) => $j->whereRaw($this->unir('s')))
@@ -125,6 +164,10 @@ class SqlServerCatalogo implements Catalogo
 
         if ($this->whereRaw) {
             $query->whereRaw($this->whereRaw);
+        }
+
+        if ($conPrecio && $this->conPrecioRaw) {
+            $query->whereRaw($this->conPrecioRaw);
         }
 
         return $query;

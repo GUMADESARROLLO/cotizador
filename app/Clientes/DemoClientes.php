@@ -13,10 +13,13 @@ class DemoClientes implements Clientes
     /** @var array<string, Cliente> */
     private array $clientes = [];
 
-    public function __construct(?array $filas = null)
+    public function __construct(?array $filas = null, ?string $vendedor = null)
     {
         foreach ($filas ?? self::filasDeEjemplo() as $fila) {
             $c = Cliente::fromRow($fila);
+            if ($vendedor && $c->vendedor !== $vendedor) {
+                continue; // solo clientes del vendedor configurado
+            }
             $this->clientes[$c->codigo] = $c;
         }
     }
@@ -49,9 +52,10 @@ class DemoClientes implements Clientes
 
     private static function filasDeEjemplo(): array
     {
-        $f = fn ($codigo, $nombre, $moroso, $disponible) => [
+        $f = fn ($codigo, $nombre, $moroso, $disponible, $vendedor = 'F12', $nivel = 'INST.PUB. C$', $monedaNivel = 'L', $moneda = 'COR') => [
             'codigo' => $codigo, 'nombre' => $nombre, 'direccion' => 'Managua', 'ruc' => 'J03100000'.$codigo,
-            'vendedor' => 'F01', 'moroso' => $moroso, 'credito' => 50000, 'saldo' => 50000 - $disponible, 'disponible' => $disponible,
+            'vendedor' => $vendedor, 'moroso' => $moroso, 'credito' => 50000, 'saldo' => 50000 - $disponible, 'disponible' => $disponible,
+            'condicion_pago' => '180', 'nivel_precio' => $nivel, 'moneda_nivel' => $monedaNivel, 'moneda' => $moneda,
         ];
 
         return [
@@ -59,6 +63,9 @@ class DemoClientes implements Clientes
             $f('00004', 'FARMACIA LA UNION', 'S', 2500),
             $f('00005', 'FARMACIA LOPEZ', 'N', 11300),
             $f('00010', 'HOSPITAL CENTRAL', 'N', 0),
+            $f('00020', 'FARMACIA DE OTRO VENDEDOR', 'N', 5000, 'F01'),
+            $f('00030', 'ORGANISMO EN DOLARES', 'N', 9000, 'F12', 'INST.PRIV.U$', 'D', 'DOL'),
+            $f('00031', 'CLINICA PRECIO C$ CREDITO US$', 'N', 9000, 'F12', 'FARMACIA', 'L', 'DOL'),
         ];
     }
 }

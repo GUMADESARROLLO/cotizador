@@ -138,6 +138,34 @@ class SqlServerCatalogoTest extends TestCase
         $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $catalogo->buscar('tubo')));
     }
 
+    public function test_cuenta_los_que_coinciden_pero_no_tienen_precio_en_el_nivel(): void
+    {
+        Schema::create('precios', function ($t) {
+            $t->string('ARTICULO');
+            $t->string('NIVEL_PRECIO');
+            $t->decimal('PRECIO', 10, 2);
+        });
+        DB::table('precios')->insert(['ARTICULO' => 'A-100', 'NIVEL_PRECIO' => 'FARMACIA', 'PRECIO' => 250]);
+
+        $catalogo = fn ($nivel) => new SqlServerCatalogo(
+            db: DB::connection(),
+            tabla: 'inv_art',
+            columnas: ['codigo' => 'CVE_ART', 'descripcion' => 'DESCR', 'unidad' => 'UNI_MED', 'precio' => 'PRECIO1', 'existencia' => 'EXIST'],
+            whereRaw: 'a.ACTIVO = 1',
+            precio: ['table' => 'precios', 'articulo' => 'ARTICULO', 'precio' => 'PRECIO', 'nivel_columna' => 'NIVEL_PRECIO', 'nivel' => $nivel],
+            conPrecioRaw: 'p.precio > 0',
+        );
+
+        // Nivel sin precio para "Tubo cobre": no aparece, pero se sabe que existe.
+        $this->assertSame([], $catalogo('INST.PUB. U$')->buscar('tubo'));
+        $this->assertSame(1, $catalogo('INST.PUB. U$')->contarSinPrecio('tubo'));
+        $this->assertSame(0, $catalogo('INST.PUB. U$')->contarSinPrecio('inexistente'));
+
+        // Con nivel que sí tiene precio, aparece y no cuenta como "sin precio".
+        $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $catalogo('FARMACIA')->buscar('tubo')));
+        $this->assertSame(0, $catalogo('FARMACIA')->contarSinPrecio('tubo'));
+    }
+
     public function test_codigos_numericos_se_envian_como_texto(): void
     {
         // Las claves del carrito como "13401062" llegan como int desde array_keys().
@@ -152,6 +180,31 @@ class SqlServerCatalogoTest extends TestCase
         $this->assertEqualsCanonicalizing(['13401062', 'A-100'], array_map('strval', array_keys($res)));
         $this->assertContains('13401062', $bindings, 'el código debe enlazarse como string');
         $this->assertNotContains(13401062, $bindings, true);
+    }
+
+    public function test_existencia_solo_de_las_bodegas_incluidas(): void
+    {
+        Schema::create('exist_bod', function ($t) {
+            $t->string('ARTICULO');
+            $t->string('BODEGA');
+            $t->decimal('CANT_DISPONIBLE', 10, 2);
+        });
+        DB::table('exist_bod')->insert([
+            ['ARTICULO' => 'A-100', 'BODEGA' => '006', 'CANT_DISPONIBLE' => 7],
+            ['ARTICULO' => 'A-100', 'BODEGA' => '002', 'CANT_DISPONIBLE' => 500],
+            ['ARTICULO' => 'A-102', 'BODEGA' => '002', 'CANT_DISPONIBLE' => 50],
+        ]);
+
+        $catalogo = new SqlServerCatalogo(
+            db: DB::connection(),
+            tabla: 'inv_art',
+            columnas: ['codigo' => 'CVE_ART', 'descripcion' => 'DESCR', 'unidad' => 'UNI_MED', 'precio' => 'PRECIO1', 'existencia' => 'EXIST'],
+            stock: ['table' => 'exist_bod', 'articulo' => 'ARTICULO', 'cantidad' => 'CANT_DISPONIBLE', 'bodega' => 'BODEGA', 'incluir' => ['006'], 'excluir' => ['004']],
+        );
+
+        $res = $catalogo->encontrarVarios(['A-100', 'A-102']);
+        $this->assertSame(7.0, $res['A-100']->existencia); // ignora los 500 de la 002
+        $this->assertSame(0.0, $res['A-102']->existencia); // no tiene en 006: agotado
     }
 
     public function test_encontrar_varios(): void

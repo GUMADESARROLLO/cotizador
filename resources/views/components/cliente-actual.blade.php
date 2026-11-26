@@ -13,14 +13,25 @@
                 @if ($cliente->moroso)
                     <span class="badge bg-danger-soft text-danger uppercase">Moroso</span>
                 @endif
-                <span>Disponible <span class="num text-[15px] font-bold {{ $cliente->disponible > 0 ? 'text-ink' : 'text-danger' }}">{{ dinero($cliente->disponible) }}</span></span>
+                <span>Disponible <span class="num text-[15px] font-bold {{ $cliente->disponible > 0 ? 'text-ink' : 'text-danger' }}">{{ dinero($cliente->disponible, $cliente->moneda) }}</span></span>
             </p>
+            @if ($cliente->nivelPrecio || $cliente->condicionPago)
+                <p class="text-foot text-label-2 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    @if ($cliente->nivelPrecio)
+                        <span class="badge bg-cyan-soft text-cyan-ink">Precios {{ $cliente->nivelPrecio }}</span>
+                    @endif
+                    @if ($cliente->condicionPago)
+                        <span>Condición <span class="num text-[15px] font-bold text-ink">{{ $cliente->condicionPago }}</span></span>
+                    @endif
+                </p>
+            @endif
         </div>
         <a href="{{ route('clientes.index') }}" class="pressable text-royal -mr-1 shrink-0 px-1 py-2 text-[13px] font-extrabold tracking-[0.06em] uppercase">Cambiar</a>
     </div>
 
-    @if ($total !== null)
-        {{-- Aviso de crédito: el JS lo muestra/oculta al cambiar el total. No bloquea el pedido. --}}
+    @if ($total !== null && $cliente->creditoComparable())
+        {{-- Aviso de crédito: el JS lo muestra/oculta al cambiar el total. No bloquea el pedido.
+             Solo si precios y crédito están en la misma moneda (sin tipo de cambio no se comparan). --}}
         <p data-credit-warning data-disponible="{{ $cliente->disponible }}" @if ($total <= $cliente->disponible) hidden @endif
            class="bg-warn-soft text-warn border-line border-t px-4 py-2.5 text-[13px] font-semibold">
             ⚠ El total supera el crédito disponible del cliente.

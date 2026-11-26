@@ -7,7 +7,7 @@ use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder;
 
 /**
- * Lectura de clientes en SQL Server (alias "c"). Solo SELECT.
+ * Lectura de clientes en Softland.umk.CLIENTE (alias "c"). Solo SELECT.
  */
 class SqlServerClientes implements Clientes
 {
@@ -17,6 +17,9 @@ class SqlServerClientes implements Clientes
         private array $columnas,
         private ?string $whereRaw = null,
         private int $limite = 30,
+        private ?string $vendedor = null, // si se indica, solo clientes de ese vendedor
+        /** @var list<string> columnas extra donde buscar */
+        private array $buscarEn = [],
     ) {}
 
     public function buscar(string $termino, ?int $limite = null): array
@@ -26,16 +29,27 @@ class SqlServerClientes implements Clientes
             return [];
         }
 
-        [$codigo, $nombre, $ruc] = [$this->col('codigo'), $this->col('nombre'), $this->col('ruc')];
+        [$codigo, $nombre] = [$this->col('codigo'), $this->col('nombre')];
+
+        // En Softland el RUC va dentro del nombre; si hay columna RUC propia también se busca.
+        $donde = [$codigo, $nombre];
+        if (isset($this->columnas['ruc'])) {
+            $donde[] = $this->col('ruc');
+        }
+        foreach ($this->buscarEn as $extra) {
+            $donde[] = $this->db->getQueryGrammar()->wrap('c.'.$extra);
+        }
+
         $query = $this->base();
 
-        // Cada palabra debe aparecer en el código, el nombre o el RUC.
+        // Cada palabra debe aparecer en alguna de esas columnas.
         foreach ($palabras as $palabra) {
             $like = SqlLike::contiene($palabra);
-            $query->where(fn (Builder $q) => $q
-                ->whereRaw("{$codigo} LIKE ? ESCAPE '!'", [$like])
-                ->orWhereRaw("{$nombre} LIKE ? ESCAPE '!'", [$like])
-                ->orWhereRaw("{$ruc} LIKE ? ESCAPE '!'", [$like]));
+            $query->where(function (Builder $q) use ($donde, $like) {
+                foreach ($donde as $col) {
+                    $q->orWhereRaw("{$col} LIKE ? ESCAPE '!'", [$like]);
+                }
+            });
         }
 
         return $query
@@ -65,6 +79,10 @@ class SqlServerClientes implements Clientes
 
         if ($this->whereRaw) {
             $query->whereRaw($this->whereRaw);
+        }
+
+        if ($this->vendedor) {
+            $query->where('c.'.$this->columnas['vendedor'], $this->vendedor);
         }
 
         return $query;

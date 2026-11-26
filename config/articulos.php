@@ -19,47 +19,61 @@ return [
 
     'connection' => env('DB_SQL_HOST_CONNECTION', 'sqlsrv'),
 
-    // Vista de artículos con descripción y precios.
-    'table' => 'PRODUCCCION.dbo.iweb_articulos',
+    /*
+    | Tabla de artículos de Softland (antes: vista PRODUCCCION.dbo.iweb_articulos).
+    | Misma selección que la vista, verificada fila por fila (1,745 artículos):
+    | activos, código de 8 caracteres (excluye -M muestras, -B, códigos viejos de
+    | 7 dígitos) y que no sean de clasificación 7 = Servicios.
+    */
+    'table' => 'Softland.umk.ARTICULO',
 
     'columns' => [
         'codigo' => 'ARTICULO',
         'descripcion' => 'DESCRIPCION',
         'unidad' => 'UNIDAD_ALMACEN',
-        // Solo se usa si no hay nivel de precio configurado (abajo).
-        'precio' => 'PRECIO_FARMACIA',
-        // Solo se usa si no hay tabla de existencias (abajo). En la vista es solo la bodega 002.
-        'existencia' => 'total',
+        // Solo se usan si no hay nivel de precio / tabla de existencias (abajo).
+        'precio' => 'PRECIO_BASE_LOCAL',
+        'existencia' => 'EXISTENCIA_MINIMA',
     ],
 
     /*
-    | Precio: nivel INST.PUB. C$ vigente, de la misma fuente que SAC
-    | (PRODUCCION.dbo.iweb_precio / sp_iweb_precios).
-    | Ojo: en Softland la mayoría de artículos tiene este nivel en C$1.00.
+    | Precio vigente del nivel, igual que la vista iweb_precio:
+    | ARTICULO_PRECIO de la versión activa (VERSION_NIVEL.ESTADO = 'A') y con
+    | la fecha de hoy dentro de FECHA_INICIO..FECHA_FIN.
+    | "nivel" es el valor por defecto: con un cliente elegido se usa SU nivel
+    | (NIVEL_PRECIO de umk.CLIENTE), ver App\Http\Middleware\RequiereCliente.
+    | Ojo: en Softland la mayoría de artículos tiene INST.PUB. C$ en C$1.00.
     */
     'precio' => [
-        'table' => 'PRODUCCCION.dbo.iweb_precio',
+        'table' => 'Softland.umk.ARTICULO_PRECIO',
+        'version_table' => 'Softland.umk.VERSION_NIVEL',
         'articulo' => 'ARTICULO',
         'precio' => 'PRECIO',
         'nivel_columna' => 'NIVEL_PRECIO',
         'nivel' => 'INST.PUB. C$',
-        'where_raw' => "VIGENCIA = 'S'",
+        'where_raw' => "vn.ESTADO = 'A' AND GETDATE() BETWEEN ap.FECHA_INICIO AND ap.FECHA_FIN",
     ],
 
     /*
-    | Existencia real: SUM(CANT_DISPONIBLE) por artículo en Softland UMK,
-    | excluyendo la bodega 004 (dañados y vencidos).
+    | Existencia real: SUM(CANT_DISPONIBLE) por artículo en Softland UMK.
+    | Por ahora solo la bodega 006, la que usan los pedidos de F12 (y la que
+    | llevará el pedido al insertarse en Softland). "incluir" manda sobre
+    | "excluir"; con "incluir" vacío se suman todas menos las excluidas.
     */
     'stock' => [
         'table' => 'Softland.umk.EXISTENCIA_BODEGA',
         'articulo' => 'ARTICULO',
         'cantidad' => 'CANT_DISPONIBLE',
         'bodega' => 'BODEGA',
+        'incluir' => ['006'],
         'excluir' => ['004'],
     ],
 
-    // Solo artículos que tienen precio en el nivel (alias "p" = precio, "a" = vista).
-    'where_raw' => 'p.precio > 0',
+    // Selección de artículos (alias "a" = umk.ARTICULO).
+    'where_raw' => "a.ACTIVO = 'S' AND LEN(a.ARTICULO) = 8 AND ISNULL(a.CLASIFICACION_1, '') <> '7'",
+
+    // Además, solo se muestran los que tienen precio en el nivel del cliente (alias "p").
+    'con_precio_raw' => 'p.precio > 0',
 
     'search_limit' => 30,
 

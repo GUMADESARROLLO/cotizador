@@ -42,6 +42,11 @@ class DemoCatalogo implements Catalogo
         return array_slice(array_values($res), 0, $limite ?? 30);
     }
 
+    public function contarSinPrecio(string $termino): int
+    {
+        return 0; // en demo todos los artículos tienen precio
+    }
+
     public function encontrar(string $codigo): ?Articulo
     {
         return $this->articulos[$codigo] ?? null;

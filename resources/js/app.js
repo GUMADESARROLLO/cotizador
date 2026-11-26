@@ -231,6 +231,167 @@ function removeRow(codigo) {
     }, 200);
 }
 
+/* ---------- Lote de despacho: panel inferior (bottom sheet) ---------- */
+const fecha = (iso) => (iso ? iso.split('-').reverse().join('/') : 's/f'); // 2027-09-01 → 01/09/2027
+const escapar = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+function initLotes() {
+    const sheet = $('[data-lote-sheet]');
+    if (!sheet) return;
+    const panel = $('[data-sheet-panel]', sheet);
+    const lista = $('[data-sheet-lista]', sheet);
+    let trigger = null;
+    let cerrando = false;
+
+    function abrir(btn) {
+        trigger = btn;
+        const lotes = JSON.parse(btn.dataset.lotes);
+        const elegido = btn.dataset.seleccionado;
+        const unidad = btn.dataset.unidad || '';
+        $('[data-sheet-titulo]', sheet).textContent = btn.dataset.descripcion;
+
+        lista.innerHTML = lotes
+            .map(
+                (l, i) => `
+            <li class="border-line border-b last:border-b-0">
+                <button type="button" role="option" aria-selected="${l.lote === elegido}" data-lote="${escapar(l.lote)}"
+                        class="lote-opcion pressable flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left">
+                    <span class="min-w-0 flex-1">
+                        <span class="flex flex-wrap items-center gap-2">
+                            <span class="num text-ink text-[19px] font-extrabold">${escapar(l.lote)}</span>
+                            ${i === 0 ? '<span class="badge bg-cyan text-navy">Sugerido</span>' : ''}
+                        </span>
+                        <span class="text-label-2 mt-0.5 block text-[14px]">
+                            Vence <span class="num text-ink text-[16px] font-bold">${fecha(l.vence)}</span>
+                            · <span class="num text-ink text-[16px] font-bold">${qty(l.maximo)}</span> ${escapar(unidad)} disponibles
+                        </span>
+                    </span>
+                    <span class="grid size-7 shrink-0 place-items-center rounded-full ${l.lote === elegido ? 'bg-royal text-white' : 'ring-line ring-2'}" aria-hidden="true">
+                        ${l.lote === elegido ? '<svg viewBox="0 0 24 24" class="size-4" fill="currentColor"><path d="M9.55 17.6a1 1 0 0 1-.7-.3l-4.2-4.2a1 1 0 1 1 1.4-1.4l3.5 3.5 8.3-8.3a1 1 0 1 1 1.4 1.4l-9 9a1 1 0 0 1-.7.3Z"/></svg>' : ''}
+                    </span>
+                </button>
+            </li>`,
+            )
+            .join('');
+
+        cerrando = false;
+        panel.style.transform = '';
+        sheet.showModal();
+        requestAnimationFrame(() => sheet.classList.add('is-open'));
+        $('[aria-selected="true"]', lista)?.focus({ preventScroll: true });
+    }
+
+    // Sale por el mismo camino por el que entró (hacia abajo), desde donde esté.
+    function cerrar() {
+        if (!sheet.open || cerrando) return;
+        cerrando = true;
+        sheet.classList.remove('is-open', 'is-dragging');
+        panel.style.transform = '';
+        const fin = () => {
+            if (cerrando) sheet.close();
+            cerrando = false;
+            trigger?.focus({ preventScroll: true });
+        };
+        panel.addEventListener('transitionend', fin, { once: true });
+        setTimeout(fin, 450); // por si no hay transición (movimiento reducido)
+    }
+
+    async function elegir(lote) {
+        const codigo = trigger.dataset.codigo;
+        if (lote === trigger.dataset.seleccionado) return cerrar();
+        lista.querySelectorAll('button').forEach((b) => (b.disabled = true));
+        inflight++;
+        try {
+            const res = await fetch('/pedido/items/lote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': CSRF,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ codigo, lote }),
+            });
+            const data = await res.json();
+            if (data.resumen) renderResumen(data.resumen);
+            if (!res.ok) {
+                haptic();
+                toast(data.message ?? 'No se pudo cambiar el lote.');
+                return;
+            }
+            // Botón del artículo con el lote nuevo.
+            trigger.dataset.seleccionado = data.lote.lote;
+            $('[data-lote-texto]', trigger).innerHTML =
+                `<span class="num block text-[17px] leading-tight font-bold">${escapar(data.lote.lote)}</span>` +
+                `<span class="text-label-2 block">vence <span class="num text-ink text-[16px] font-bold">${fecha(data.lote.vence)}</span>` +
+                ` · <span class="num text-ink text-[16px] font-bold">${qty(data.lote.maximo)}</span> ${escapar(trigger.dataset.unidad || '')} disp.</span>`;
+            // El tope de la cantidad ahora es la existencia del lote elegido.
+            $$(`[data-stepper][data-codigo="${CSS.escape(codigo)}"]`).forEach((s) => {
+                s.dataset.max = data.maximo;
+                paintStepper(s, data.cantidad);
+            });
+            const sub = $('[data-subtotal]', $(`[data-cart-row="${CSS.escape(codigo)}"]`));
+            if (sub) sub.textContent = money(data.subtotal);
+            cerrar();
+            if (data.ajustado) {
+                haptic();
+                toast(data.message);
+            }
+        } catch {
+            toast('Sin conexión. El lote no se cambió.');
+        } finally {
+            inflight--;
+            lista.querySelectorAll('button').forEach((b) => (b.disabled = false));
+        }
+    }
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-lote-trigger]');
+        if (btn) abrir(btn);
+    });
+    lista.addEventListener('click', (e) => {
+        const op = e.target.closest('[data-lote]');
+        if (op && !op.disabled) elegir(op.dataset.lote);
+    });
+    $('[data-sheet-cerrar]', sheet).addEventListener('click', cerrar);
+    sheet.addEventListener('click', (e) => e.target === sheet && cerrar()); // tocar fuera
+    sheet.addEventListener('cancel', (e) => {
+        e.preventDefault(); // Escape: cerrar con animación
+        cerrar();
+    });
+
+    // Arrastrar hacia abajo para cerrar: sigue al dedo 1:1 y decide por distancia o velocidad.
+    let inicio = null;
+    sheet.querySelectorAll('[data-sheet-grab]').forEach((zona) => {
+        zona.addEventListener('pointerdown', (e) => {
+            inicio = { y: e.clientY, t: e.timeStamp, ultY: e.clientY, ultT: e.timeStamp, vel: 0 };
+            zona.setPointerCapture(e.pointerId);
+            sheet.classList.add('is-dragging');
+        });
+        zona.addEventListener('pointermove', (e) => {
+            if (!inicio) return;
+            const dy = e.clientY - inicio.y;
+            const dt = e.timeStamp - inicio.ultT || 1;
+            inicio.vel = (e.clientY - inicio.ultY) / dt; // px/ms
+            inicio.ultY = e.clientY;
+            inicio.ultT = e.timeStamp;
+            // Hacia arriba resiste (borde suave); hacia abajo sigue al dedo.
+            panel.style.transform = `translateY(${dy > 0 ? dy : dy / 6}px)`;
+        });
+        const soltar = (e) => {
+            if (!inicio) return;
+            const dy = e.clientY - inicio.y;
+            const vel = inicio.vel;
+            inicio = null;
+            sheet.classList.remove('is-dragging');
+            if (dy > 120 || vel > 0.5) cerrar();
+            else panel.style.transform = ''; // vuelve a su lugar desde donde quedó
+        };
+        zona.addEventListener('pointerup', soltar);
+        zona.addEventListener('pointercancel', soltar);
+    });
+}
+
 function initSteppers() {
     // La respuesta visual ocurre al tocar (:active en CSS); el cambio se confirma al soltar.
     document.addEventListener('click', (e) => {
@@ -281,6 +442,68 @@ function initConfirmForm() {
 
 initScrollEdge();
 initSearch();
+/* ---------- Envío a Softland con confirmación (SweetAlert2) ---------- */
+// Se carga bajo demanda: solo en la pantalla del pedido, no en cada página.
+async function swal() {
+    const [{ default: Swal }] = await Promise.all([import('sweetalert2'), import('sweetalert2/dist/sweetalert2.min.css')]);
+    return Swal.mixin({
+        buttonsStyling: false,
+        reverseButtons: true,
+        iconColor: '#29b6e8', // cian de la marca
+        customClass: {
+            popup: 'swal-unimark',
+            confirmButton: 'swal-confirmar',
+            cancelButton: 'swal-cancelar',
+            actions: 'swal-acciones',
+        },
+    });
+}
+
+function initSoftland() {
+    const form = $('[data-softland-form]');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            if (form.dataset.confirmado) return; // ya confirmado: enviar
+            e.preventDefault();
+            const d = form.dataset;
+            const Swal = await swal();
+            const r = await Swal.fire({
+                icon: 'question',
+                title: '¿Enviar a Softland?',
+                html: `Se creará el pedido <b>${escapar(d.folio)}</b> en Softland para<br><b>${escapar(d.cliente)}</b><br>
+                       <span class="swal-detalle">${escapar(d.lineas)} artículo(s) · ${escapar(d.total)}<br>
+                       Consecutivo ${escapar(d.consecutivo)} · usuario ${escapar(d.usuario)}</span>`,
+                showCancelButton: true,
+                confirmButtonText: 'Sí, enviar',
+                cancelButtonText: 'Cancelar',
+                focusCancel: true,
+            });
+            if (!r.isConfirmed) return;
+            form.dataset.confirmado = '1';
+            Swal.fire({
+                title: 'Enviando a Softland…',
+                text: 'No cierres esta página.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => Swal.showLoading(),
+            });
+            form.submit();
+        });
+    }
+
+    // Resultado del envío (viene de la redirección).
+    const res = window.__softland;
+    if (res) {
+        swal().then((Swal) =>
+            res.ok
+                ? Swal.fire({ icon: 'success', title: 'Pedido creado en Softland', html: `Número <b class="swal-numero">${escapar(res.ok)}</b>` })
+                : Swal.fire({ icon: 'error', title: 'No se pudo enviar', text: res.error }),
+        );
+    }
+}
+
 initSteppers();
+initLotes();
 initConfirmForm();
+initSoftland();
 if (window.__aviso) toast(window.__aviso);

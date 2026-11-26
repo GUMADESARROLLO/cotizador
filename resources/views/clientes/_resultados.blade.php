@@ -33,9 +33,12 @@
                                     <span class="badge bg-danger-soft text-danger uppercase">Moroso</span>
                                 @endif
                                 @if ($c->disponible > 0)
-                                    <span class="badge bg-cyan-soft text-cyan-ink">Disponible <span class="num text-[13px]">{{ dinero($c->disponible) }}</span></span>
+                                    <span class="badge bg-cyan-soft text-cyan-ink">Disponible <span class="num text-[13px]">{{ dinero($c->disponible, $c->moneda) }}</span></span>
                                 @else
                                     <span class="badge bg-warn-soft text-warn">Sin crédito disponible</span>
+                                @endif
+                                @if ($c->nivelPrecio)
+                                    <span class="badge bg-mist text-ink-soft">{{ $c->nivelPrecio }}</span>
                                 @endif
                             </p>
                         </div>

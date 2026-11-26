@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['codigo', 'descripcion', 'unidad', 'precio', 'cantidad', 'existencia', 'subtotal'])]
+#[Fillable(['codigo', 'descripcion', 'unidad', 'lote', 'lote_vence', 'precio', 'cantidad', 'existencia', 'subtotal'])]
 class PedidoItem extends Model
 {
     protected function casts(): array

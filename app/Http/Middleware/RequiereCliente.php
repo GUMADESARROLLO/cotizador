@@ -7,7 +7,8 @@ use Closure;
 use Illuminate\Http\Request;
 
 /**
- * Los artículos y el pedido solo se usan con un cliente elegido.
+ * Los artículos y el pedido solo se usan con un cliente elegido, y se
+ * muestran con el nivel de precio y la moneda de ese cliente.
  */
 class RequiereCliente
 {
@@ -15,7 +16,14 @@ class RequiereCliente
 
     public function handle(Request $request, Closure $next)
     {
-        if ($this->carrito->cliente()) {
+        if ($cliente = $this->carrito->cliente()) {
+            // Precios del nivel del cliente (como el NIVEL_PRECIO del pedido en Softland)
+            // y su moneda: L = C$, D = US$.
+            if ($cliente->nivelPrecio !== '') {
+                config(['articulos.precio.nivel' => $cliente->nivelPrecio]);
+            }
+            config(['articulos.currency' => config("softland.monedas.{$cliente->monedaNivel}", 'C$')]);
+
             return $next($request);
         }
 

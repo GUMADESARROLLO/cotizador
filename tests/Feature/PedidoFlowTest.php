@@ -67,6 +67,16 @@ class PedidoFlowTest extends TestCase
             ->assertSee('Moroso');
     }
 
+    public function test_solo_clientes_del_vendedor_configurado(): void
+    {
+        $this->get('/clientes')->assertSee('Clientes de Cesia Moreira (F12)');
+        $this->get('/clientes/buscar?q=farmacia')->assertSee('FARMACIA LOPEZ')->assertDontSee('OTRO VENDEDOR');
+
+        $this->from('/clientes')->post('/clientes/seleccionar', ['codigo' => '00020'])
+            ->assertRedirect('/clientes')->assertSessionHas('aviso');
+        $this->get('/articulos')->assertRedirect(route('clientes.index'));
+    }
+
     public function test_cliente_inexistente_no_se_puede_elegir(): void
     {
         $this->from('/clientes')->post('/clientes/seleccionar', ['codigo' => 'NOPE'])

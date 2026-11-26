@@ -9,6 +9,9 @@ interface Catalogo
 
     public function encontrar(string $codigo): ?Articulo;
 
+    /** Cuántos artículos coinciden con la búsqueda pero no tienen precio en el nivel actual. */
+    public function contarSinPrecio(string $termino): int;
+
     /**
      * @param  list<string>  $codigos
      * @return array<string, Articulo> indexado por código

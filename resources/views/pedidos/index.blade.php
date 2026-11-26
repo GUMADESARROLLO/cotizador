@@ -21,8 +21,17 @@
                         <div class="min-w-0 flex-1">
                             <p class="truncate font-semibold">{{ $p->cliente }}</p>
                             <p class="text-foot text-label-2 mt-0.5"><span class="num text-royal text-[15px] font-extrabold">{{ $p->folio }}</span> · {{ $p->created_at->format('d/m/Y H:i') }} · {{ $p->lineas }} art.</p>
+                            <p class="mt-1">
+                                @if ($p->enviadoASoftland())
+                                    <span class="badge bg-cyan-soft text-cyan-ink">Softland <span class="num text-[13px]">{{ $p->softland_pedido }}</span></span>
+                                @elseif ($p->softland_estado === \App\Models\Pedido::SOFTLAND_ERROR)
+                                    <span class="badge bg-danger-soft text-danger">Error al enviar</span>
+                                @else
+                                    <span class="badge bg-mist text-ink-soft">Sin enviar a Softland</span>
+                                @endif
+                            </p>
                         </div>
-                        <p class="price">{{ dinero($p->total) }}</p>
+                        <p class="price">{{ dinero($p->total, $p->moneda ?? 'L') }}</p>
                         <svg viewBox="0 0 24 24" class="text-label-3 size-4 shrink-0" fill="currentColor" aria-hidden="true"><path d="M8.3 4.3a1 1 0 0 1 1.4 0l7 7a1 1 0 0 1 0 1.4l-7 7a1 1 0 0 1-1.4-1.4l6.29-6.3-6.3-6.3a1 1 0 0 1 0-1.4Z"/></svg>
                     </a>
                 </li>

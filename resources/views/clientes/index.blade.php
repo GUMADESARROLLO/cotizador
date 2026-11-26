@@ -1,4 +1,4 @@
-<x-layouts.app title="Elegir cliente" slogan="¿Para quién es el pedido?" tab="cliente" :resumen="$resumen">
+<x-layouts.app title="Elegir cliente" :slogan="'Clientes de '.config('clientes.vendedor_nombre').' ('.config('clientes.vendedor').')'" tab="cliente" :resumen="$resumen">
     @if ($actual)
         <div class="mb-4 flex items-center justify-between gap-3 rounded-[20px] bg-white/10 px-4 py-3 text-white ring-1 ring-white/20">
             <p class="min-w-0 text-sub">

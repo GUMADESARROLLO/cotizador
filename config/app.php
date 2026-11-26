@@ -65,7 +65,8 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Hora de Nicaragua: la misma que usa SQL Server/Softland (FECHA_HORA, RecordDate, fechas del pedido).
+    'timezone' => env('APP_TIMEZONE', 'America/Managua'),
 
     /*
     |--------------------------------------------------------------------------
