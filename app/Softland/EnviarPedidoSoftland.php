@@ -117,6 +117,10 @@ class EnviarPedidoSoftland
             throw new DomainException('El pedido no tiene artículos.');
         }
 
+        if ($pedido->fecha_pedido && $pedido->fecha_pedido->lt(today())) {
+            throw new DomainException('La fecha del pedido ('.fecha_larga($pedido->fecha_pedido).') ya pasó. Modifica el pedido para elegir otra fecha.');
+        }
+
         $this->validarLotes($items);
 
         $e = $this->config['esquema'];
@@ -151,7 +155,7 @@ class EnviarPedidoSoftland
                 ]);
 
             // 3. Encabezado y líneas (los mismos datos de la vista previa).
-            $datos = $this->preparador->preparar($numero, $pedido->cliente_codigo, $items, $ahora, $pedido->notas);
+            $datos = $this->preparador->preparar($numero, $pedido->cliente_codigo, $items, $ahora, $pedido->notas, $pedido->fecha_pedido);
 
             $this->db->table($e.'.PEDIDO')->insert($this->valores($datos['encabezado']));
             foreach ($datos['lineas'] as $linea) {
@@ -188,9 +192,10 @@ class EnviarPedidoSoftland
                 continue; // artículo sin control de lotes
             }
             $lote = collect($lotes[$i['codigo']] ?? [])->firstWhere('lote', $i['lote']);
-            if (! $lote || $lote->maximoPedible() < $i['cantidad']) {
-                $hay = $lote ? number_format($lote->maximoPedible(), 0, '.', ',') : '0';
-                throw new DomainException("El lote {$i['lote']} del artículo {$i['codigo']} ya no tiene existencia suficiente (hay {$hay}, se piden ".number_format($i['cantidad'], 0, '.', ',').').');
+            // En cajas, con fracción (2,810 viales = 56.2 CJA); margen por redondeo a 8 decimales.
+            if (! $lote || $lote->disponible + 0.000001 < $i['cantidad']) {
+                $hay = $lote ? cantidad($lote->disponible) : '0';
+                throw new DomainException("El lote {$i['lote']} del artículo {$i['codigo']} ya no tiene existencia suficiente (hay {$hay}, se piden ".cantidad($i['cantidad']).').');
             }
         }
     }

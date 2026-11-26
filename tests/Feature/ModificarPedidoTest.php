@@ -62,7 +62,7 @@ class ModificarPedidoTest extends TestCase
             ->assertSee($p->folio)
             ->assertSee('Guardar cambios')
             ->assertSee('ORDEN DE COMPRA No. 1')
-            ->assertSee('data-seleccionado="LA-2"', false);
+            ->assertSee('Lote <span class="num text-ink text-[15px] font-bold">LA-2</span>', false);
 
         // Cambios: más cantidad, otro artículo y otras observaciones.
         $this->postJson('/pedido/items', ['codigo' => 'A1', 'cantidad' => 8]);

@@ -20,7 +20,7 @@
                     <a href="{{ route('pedidos.show', $p) }}" class="pressable active:bg-mist flex items-center gap-3 px-4 py-3.5">
                         <div class="min-w-0 flex-1">
                             <p class="truncate font-semibold">{{ $p->cliente }}</p>
-                            <p class="text-foot text-label-2 mt-0.5"><span class="num text-royal text-[15px] font-extrabold">{{ $p->folio }}</span> · {{ $p->created_at->format('d/m/Y H:i') }} · {{ $p->lineas }} art.</p>
+                            <p class="text-foot text-label-2 mt-0.5"><span class="num text-royal text-[15px] font-extrabold">{{ $p->folio }}</span> · {{ ($p->fecha_pedido ?? $p->created_at)->format('d/m/Y') }} · {{ $p->lineas }} art.</p>
                             <p class="mt-1">
                                 @if ($p->enviadoASoftland())
                                     <span class="badge bg-cyan-soft text-cyan-ink">Softland <span class="num text-[13px]">{{ $p->softland_pedido }}</span></span>

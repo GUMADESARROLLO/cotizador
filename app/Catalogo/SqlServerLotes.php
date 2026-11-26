@@ -6,7 +6,7 @@ use Illuminate\Database\ConnectionInterface;
 
 /**
  * Lotes desde Softland.umk.EXISTENCIA_LOTE + umk.LOTE. Solo SELECT.
- * Solo lotes aprobados (LOTE.ESTADO = 'A') con al menos 1 unidad disponible.
+ * Solo lotes aprobados (LOTE.ESTADO = 'A') con existencia (puede ser fracción de caja).
  */
 class SqlServerLotes implements Lotes
 {
@@ -33,7 +33,7 @@ class SqlServerLotes implements Lotes
                 })
                 ->select(['el.ARTICULO as articulo', 'el.LOTE as lote', 'el.CANT_DISPONIBLE as disponible', 'l.FECHA_VENCIMIENTO as vence'])
                 ->where('el.BODEGA', $this->bodega)
-                ->where('el.CANT_DISPONIBLE', '>=', 1)
+                ->where('el.CANT_DISPONIBLE', '>', 0)
                 ->where('l.ESTADO', $this->estado)
                 ->whereIn('el.ARTICULO', $bloque)
                 ->orderBy('el.ARTICULO')

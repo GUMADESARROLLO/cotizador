@@ -93,7 +93,10 @@
             @if ($pedido->contacto)
                 <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">Contacto</span><span class="text-right font-semibold">{{ $pedido->contacto }}</span></li>
             @endif
-            <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">Fecha</span><span class="num text-lg font-bold">{{ $pedido->created_at->format('d/m/Y H:i') }}</span></li>
+            @if ($pedido->fecha_pedido)
+                <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">Fecha del pedido</span><span class="text-right font-bold first-letter:uppercase">{{ fecha_larga($pedido->fecha_pedido) }}</span></li>
+            @endif
+            <li class="flex justify-between gap-4 px-4 py-3"><span class="text-label-2 font-semibold">Creado</span><span class="num text-lg font-bold">{{ $pedido->created_at->format('d/m/Y H:i') }}</span></li>
         </ul>
 
         <section>
@@ -103,7 +106,16 @@
                     <li class="flex items-start justify-between gap-3 px-4 py-3.5">
                         <div class="min-w-0">
                             <p class="leading-snug font-semibold">{{ $i->descripcion }}</p>
+                            @php $l = $i->comoLinea(); @endphp
                             <p class="text-foot text-label-2 mt-1"><span class="num text-[15px] font-bold">{{ $i->codigo }} · {{ cantidad($i->cantidad) }} {{ $i->unidad }} × {{ dinero($i->precio, $pedido->moneda ?? 'L') }}</span></p>
+                            @if (\App\Pedidos\Linea::tieneEmpaque($l))
+                                {{-- Lo que pidió el cliente, en unidades: 2,800 VIA = 56 CJA · C$32.93 / VIA --}}
+                                <p class="text-foot text-label-2">
+                                    <span class="num text-ink text-[15px] font-bold">{{ cantidad($l['unidades']) }} {{ \App\Pedidos\Linea::unidadInterna($l) }}</span>
+                                    = {{ cantidad($i->cantidad) }} {{ \App\Pedidos\Linea::unidadCaja($l) }}
+                                    · <span class="num text-[15px] font-bold">{{ dinero(\App\Pedidos\Linea::precioUnidad($l), $pedido->moneda ?? 'L') }}</span> / {{ \App\Pedidos\Linea::unidadInterna($l) }}
+                                </p>
+                            @endif
                             @if ($i->lote)
                                 <p class="text-foot text-label-2">Lote <span class="num text-ink text-[15px] font-bold">{{ $i->lote }}</span>@if ($i->lote_vence) · vence <span class="num text-[15px] font-bold">{{ \Illuminate\Support\Carbon::parse($i->lote_vence)->format('d/m/Y') }}</span>@endif</p>
                             @endif

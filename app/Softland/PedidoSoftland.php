@@ -31,11 +31,11 @@ class PedidoSoftland
      * @param  array<array-key, array{codigo:string,precio:float,cantidad:float,lote?:?string}>  $items  del carrito
      * @return array{encabezado: array<string, array{valor:mixed, origen:string}>, lineas: list<array<string, array{valor:mixed, origen:string}>>}
      */
-    public function preparar(string $numero, string $clienteCodigo, array $items, CarbonInterface $ahora, ?string $observaciones = null): array
+    public function preparar(string $numero, string $clienteCodigo, array $items, CarbonInterface $ahora, ?string $observaciones = null, ?CarbonInterface $fechaPedido = null): array
     {
         return [
-            'encabezado' => $this->encabezado($numero, $clienteCodigo, $items, $ahora, $observaciones),
-            'lineas' => $this->lineas($numero, $items, $ahora),
+            'encabezado' => $this->encabezado($numero, $clienteCodigo, $items, $ahora, $observaciones, $fechaPedido),
+            'lineas' => $this->lineas($numero, $items, $ahora, $fechaPedido),
         ];
     }
 
@@ -43,11 +43,13 @@ class PedidoSoftland
      * @param  array<array-key, array{codigo:string,precio:float,cantidad:float}>  $items  del carrito
      * @return array<string, array{valor:mixed, origen:string}>
      */
-    public function encabezado(string $numero, string $clienteCodigo, array $items, CarbonInterface $ahora, ?string $observaciones = null): array
+    public function encabezado(string $numero, string $clienteCodigo, array $items, CarbonInterface $ahora, ?string $observaciones = null, ?CarbonInterface $fechaPedido = null): array
     {
         $c = $this->fichaCliente($clienteCodigo);
         $cfg = $this->config;
         $hoy = $ahora->copy()->startOfDay()->format('Y-m-d H:i:s.v');
+        // Fecha del pedido elegida en el calendario (por defecto hoy).
+        $fecha = ($fechaPedido ?? $ahora)->copy()->startOfDay()->format('Y-m-d H:i:s.v');
         $ahoraTxt = $ahora->format('Y-m-d H:i:s.v');
         $usuario = $this->usuarioAuditoria();
 
@@ -77,13 +79,14 @@ class PedidoSoftland
         $campos = [
             'PEDIDO' => [$numero, "consecutivo {$cfg['consecutivo']} (+1 al confirmar, con bloqueo)"],
             'ESTADO' => ['N', $fijo],
-            'FECHA_PEDIDO' => [$hoy, 'fecha de hoy'],
-            'FECHA_PROMETIDA' => [$hoy, 'fecha de hoy (= fecha del pedido)'],
-            'FECHA_PROX_EMBARQU' => [$hoy, 'fecha de hoy'],
-            'FECHA_ULT_EMBARQUE' => [$hoy, 'fecha de hoy'],
+            'FECHA_PEDIDO' => [$fecha, 'fecha del pedido (calendario)'],
+            'FECHA_PROMETIDA' => [$fecha, '= fecha del pedido'],
+            'FECHA_PROX_EMBARQU' => [$fecha, '= fecha del pedido'],
+            // Al crearse, Softland la deja en 1980-01-01 (la llena después; verificado con el pedido 00007836).
+            'FECHA_ULT_EMBARQUE' => ['1980-01-01 00:00:00.000', 'fijo al crear (Softland la llena después)'],
             'FECHA_ULT_CANCELAC' => ['1980-01-01 00:00:00.000', $fijo],
-            'FECHA_ORDEN' => [$hoy, 'fecha de hoy'],
-            'FECHA_PROYECTADA' => [$hoy, 'fecha de hoy'],
+            'FECHA_ORDEN' => [$hoy, 'día en que se crea el pedido'],
+            'FECHA_PROYECTADA' => [$hoy, 'día en que se crea el pedido'],
             'FECHA_HORA' => [$ahoraTxt, 'fecha y hora de creación'],
             'TARJETA_CREDITO' => [' ', $fijo],
             'CLIENTE' => [$c->CLIENTE, 'cliente elegido'],
@@ -166,10 +169,12 @@ class PedidoSoftland
      * @param  array<array-key, array{codigo:string,precio:float,cantidad:float,lote?:?string}>  $items
      * @return list<array<string, array{valor:mixed, origen:string}>>
      */
-    public function lineas(string $numero, array $items, CarbonInterface $ahora): array
+    public function lineas(string $numero, array $items, CarbonInterface $ahora, ?CarbonInterface $fechaPedido = null): array
     {
         $cfg = $this->config;
         $hoy = $ahora->copy()->startOfDay()->format('Y-m-d H:i:s.v');
+        // Fecha del pedido elegida en el calendario (por defecto hoy).
+        $fecha = ($fechaPedido ?? $ahora)->copy()->startOfDay()->format('Y-m-d H:i:s.v');
         $ahoraTxt = $ahora->format('Y-m-d H:i:s.v');
         $usuario = $this->usuarioAuditoria();
         $fijo = 'fijo (igual en los pedidos de F12)';
@@ -199,8 +204,8 @@ class PedidoSoftland
                 'CANTIDAD_RESERVADA' => [0, $fijo],
                 'CANTIDAD_BONIFICAD' => [0, $fijo],
                 'CANTIDAD_CANCELADA' => [0, $fijo],
-                'FECHA_ENTREGA' => [$hoy, 'fecha de hoy'],
-                'FECHA_PROMETIDA' => [$hoy, 'fecha de hoy'],
+                'FECHA_ENTREGA' => [$fecha, '= fecha del pedido'],
+                'FECHA_PROMETIDA' => [$fecha, '= fecha del pedido'],
                 'CUENTA_CONTABLE' => [$f->CTA_VENTAS_LOC ?? null, "cuenta de artículo {$cuentaArt} → umk.ARTICULO_CUENTA.CTA_VENTAS_LOC"],
                 'CENTRO_COSTO' => [$f->CTR_VENTAS_LOC ?? null, "cuenta de artículo {$cuentaArt} → umk.ARTICULO_CUENTA.CTR_VENTAS_LOC"],
                 'PORC_IMPUESTO1' => [$porc, "impuesto del artículo {$impuestoArt} → umk.IMPUESTO.IMPUESTO1"],

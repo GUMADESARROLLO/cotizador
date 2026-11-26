@@ -50,6 +50,9 @@ return [
     |   CONDICION_PAGO, NIVEL_PRECIO (y con él la moneda: MONEDA_NIVEL L/D).
     */
 
+    // Hasta cuántos días adelante se puede poner la fecha del pedido (calendario).
+    'fecha_max_dias' => 60,
+
     // Minutos tras los que un envío que quedó en "enviando" se revisa contra Softland.
     'envio_trabado_minutos' => 2,
 

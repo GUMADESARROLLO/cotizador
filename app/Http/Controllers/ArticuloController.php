@@ -26,15 +26,10 @@ class ArticuloController extends Controller
         $q = trim((string) $request->query('q', ''));
         $error = false;
         $articulos = [];
-        $sinPrecio = 0;
 
         if (mb_strlen($q) >= 2) {
             try {
                 $articulos = $catalogo->buscar($q);
-                // Si no hay resultados, ¿es porque no tienen precio en el nivel del cliente?
-                if ($articulos === []) {
-                    $sinPrecio = $catalogo->contarSinPrecio($q);
-                }
             } catch (QueryException|PDOException $e) {
                 Log::error('Catálogo SQL Server: '.$e->getMessage());
                 $error = true;
@@ -45,10 +40,8 @@ class ArticuloController extends Controller
             'q' => $q,
             'articulos' => $articulos,
             'error' => $error,
-            'sinPrecio' => $sinPrecio,
-            'nivel' => $carrito->cliente()?->nivelPrecio,
             'imagenes' => $imagenes->urls(array_map(fn ($a) => $a->codigo, $articulos)),
-            'enCarrito' => array_map(fn ($i) => $i['cantidad'], $carrito->items()),
+            'enCarrito' => $carrito->items(),
         ]);
     }
 }

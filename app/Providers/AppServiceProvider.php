@@ -39,7 +39,6 @@ class AppServiceProvider extends ServiceProvider
                 limite: $cfg['search_limit'],
                 stock: $cfg['stock'],
                 precio: $cfg['precio'],
-                conPrecioRaw: $cfg['con_precio_raw'] ?? null,
             );
         });
 

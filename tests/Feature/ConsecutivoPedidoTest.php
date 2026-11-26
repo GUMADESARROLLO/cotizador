@@ -68,6 +68,6 @@ class ConsecutivoPedidoTest extends TestCase
         $this->get('/pedido')->assertOk()
             ->assertSee('Pedido Softland')
             ->assertSee('N.º 00007836')
-            ->assertSee('Consecutivo DESP-A');
+            ->assertSee('Consecutivo <b class="text-ink">DESP-A</b>', false);
     }
 }

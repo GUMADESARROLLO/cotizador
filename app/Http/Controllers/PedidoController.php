@@ -7,6 +7,7 @@ use App\Catalogo\Lotes;
 use App\Clientes\Clientes;
 use App\Models\Pedido;
 use App\Pedidos\Carrito;
+use App\Pedidos\Linea;
 use App\Softland\EnviarPedidoSoftland;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -72,6 +73,13 @@ class PedidoController extends Controller
                 ->with('aviso', 'Agrega al menos un artículo.');
         }
 
+        // Fecha del pedido (calendario): no puede haber quedado en el pasado.
+        if ($carrito->fecha()->lt(today())) {
+            return redirect()->route('carrito.index')->withInput()
+                ->with('aviso', 'La fecha del pedido ('.fecha_larga($carrito->fecha()).') ya pasó. Elige otra.');
+        }
+        $data['fecha_pedido'] = $carrito->fecha()->format('Y-m-d');
+
         // Revalidar contra Softland: precio, existencia y el lote elegido.
         $items = $carrito->items();
         $actuales = $catalogo->encontrarVarios(array_keys($items));
@@ -81,12 +89,15 @@ class PedidoController extends Controller
         foreach ($items as $codigo => $item) {
             $articulo = $actuales[$codigo] ?? null;
             $lote = $carrito->loteVigente((string) $codigo, $lotesActuales[$codigo] ?? []);
-            $nueva = $articulo ? $carrito->fijar($articulo, $item['cantidad'], $lote) : 0;
+            $pedida = Carrito::capturada($item); // en su modo: unidades o cajas
+            $nueva = $articulo ? $carrito->fijar($articulo, $pedida, $lote) : 0;
             if (! $articulo) {
                 $carrito->quitar((string) $codigo);
             }
             $cambioLote = ($item['lote'] ?? null) !== $lote?->lote;
-            if ($nueva != $item['cantidad'] || $cambioLote || ($articulo && $articulo->precio != $item['precio'])) {
+            // Un precio puesto a mano no se pisa con el del nivel.
+            $cambioPrecio = $articulo && empty($item['precio_manual']) && $articulo->precio != $item['precio'];
+            if (abs($nueva - $pedida) > 0.00001 || $cambioLote || $cambioPrecio) {
                 $ajustes[] = $codigo;
             }
         }
@@ -96,6 +107,14 @@ class PedidoController extends Controller
                 ->withInput()
                 ->with('aviso', 'La existencia, el lote o el precio cambió en '.count($ajustes).' artículo(s). Revisa el pedido antes de confirmar.')
                 ->with('ajustados', $ajustes);
+        }
+
+        // Todo artículo debe llevar precio (los que no tienen en el nivel se ponen a mano).
+        $sinPrecio = array_keys(array_filter($carrito->items(), Linea::sinPrecio(...)));
+        if ($sinPrecio) {
+            return redirect()->route('carrito.index')->withInput()
+                ->with('aviso', 'Pon el precio de '.count($sinPrecio).' artículo(s) antes de confirmar.')
+                ->with('ajustados', $sinPrecio);
         }
 
         $editandoId = $carrito->editando();
@@ -114,9 +133,7 @@ class PedidoController extends Controller
             }
 
             foreach ($carrito->items() as $item) {
-                $pedido->items()->create($item + [
-                    'subtotal' => round($item['precio'] * $item['cantidad'], 2),
-                ]);
+                $pedido->items()->create($item + ['subtotal' => Carrito::subtotal($item)]);
             }
 
             if (! $editandoId) {
@@ -178,14 +195,26 @@ class PedidoController extends Controller
             $disponibles = $lotes[(string) $item->codigo] ?? [];
             // Respeta el lote que tenía el pedido si sigue disponible; si no, el sugerido.
             $lote = collect($disponibles)->firstWhere('lote', $item->lote) ?? ($disponibles[0] ?? null);
-            $aplicada = $carrito->fijar($articulo, (float) $item->cantidad, $lote);
+            // Mismo modo de captura (unidades o cajas) y, si lo tenía, su precio manual.
+            $linea = $item->comoLinea();
+            $pedida = Carrito::capturada($linea);
+            $aplicada = $carrito->fijar($articulo, $pedida, $lote, $linea['modo']);
+            if ($linea['precio_manual'] && $aplicada > 0) {
+                $carrito->fijarPrecio((string) $item->codigo, $linea['precio'], Carrito::CAJA);
+            }
+            $cambioPrecio = ! $linea['precio_manual'] && $articulo->precio != $item->precio;
 
-            if ($aplicada != $item->cantidad || $lote?->lote !== $item->lote || $articulo->precio != $item->precio) {
+            if (abs($aplicada - $pedida) > 0.00001 || $lote?->lote !== $item->lote || $cambioPrecio) {
                 $ajustados[] = (string) $item->codigo;
             }
         }
 
-        $carrito->editar($pedido->id, $pedido->notas);
+        // Su fecha, salvo que ya haya pasado (entonces hoy, y se avisa).
+        $fecha = $pedido->fecha_pedido && $pedido->fecha_pedido->gte(today()) ? $pedido->fecha_pedido : today();
+        if ($pedido->fecha_pedido && $pedido->fecha_pedido->lt(today())) {
+            $ajustados[] = 'fecha';
+        }
+        $carrito->editar($pedido->id, $pedido->notas, $fecha);
 
         return redirect()->route('carrito.index')
             ->with('aviso', $ajustados

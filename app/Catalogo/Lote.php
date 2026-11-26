@@ -10,9 +10,16 @@ final readonly class Lote
         public ?string $vence, // Y-m-d
     ) {}
 
+    /** Máximo en cajas (se permiten fracciones de caja). */
     public function maximoPedible(): float
     {
-        return floor($this->disponible);
+        return Cantidades::bajar4($this->disponible);
+    }
+
+    /** Máximo en unidades internas para un factor de empaque. */
+    public function maximoUnidades(float $factor): float
+    {
+        return Cantidades::unidades($this->disponible, $factor);
     }
 
     public function toArray(): array

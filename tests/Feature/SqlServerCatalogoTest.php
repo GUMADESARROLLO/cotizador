@@ -48,7 +48,7 @@ class SqlServerCatalogoTest extends TestCase
         $res = $this->catalogo->buscar('cobre tubo');
 
         $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $res));
-        $this->assertSame(12.0, $res[0]->maximoPedible());
+        $this->assertSame(12.5, $res[0]->maximoPedible()); // se permiten fracciones de caja
     }
 
     public function test_coincidencia_exacta_de_codigo_va_primero(): void
@@ -99,7 +99,7 @@ class SqlServerCatalogoTest extends TestCase
         $res = $catalogo->encontrarVarios(['A-100', 'A-101', 'A-102']);
 
         $this->assertSame(15.5, $res['A-100']->existencia);
-        $this->assertSame(15.0, $res['A-100']->maximoPedible());
+        $this->assertSame(15.5, $res['A-100']->maximoPedible());
         $this->assertSame(0.0, $res['A-101']->existencia); // sin filas de existencia
         $this->assertSame(0.0, $res['A-102']->existencia); // solo en la 004
 
@@ -138,8 +138,9 @@ class SqlServerCatalogoTest extends TestCase
         $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $catalogo->buscar('tubo')));
     }
 
-    public function test_cuenta_los_que_coinciden_pero_no_tienen_precio_en_el_nivel(): void
+    public function test_sin_precio_en_el_nivel_tambien_se_muestra_con_precio_cero(): void
     {
+        // El precio se pone a mano en el pedido: no se ocultan los artículos sin precio.
         Schema::create('precios', function ($t) {
             $t->string('ARTICULO');
             $t->string('NIVEL_PRECIO');
@@ -147,23 +148,37 @@ class SqlServerCatalogoTest extends TestCase
         });
         DB::table('precios')->insert(['ARTICULO' => 'A-100', 'NIVEL_PRECIO' => 'FARMACIA', 'PRECIO' => 250]);
 
-        $catalogo = fn ($nivel) => new SqlServerCatalogo(
+        $catalogo = new SqlServerCatalogo(
             db: DB::connection(),
             tabla: 'inv_art',
             columnas: ['codigo' => 'CVE_ART', 'descripcion' => 'DESCR', 'unidad' => 'UNI_MED', 'precio' => 'PRECIO1', 'existencia' => 'EXIST'],
             whereRaw: 'a.ACTIVO = 1',
-            precio: ['table' => 'precios', 'articulo' => 'ARTICULO', 'precio' => 'PRECIO', 'nivel_columna' => 'NIVEL_PRECIO', 'nivel' => $nivel],
-            conPrecioRaw: 'p.precio > 0',
+            precio: ['table' => 'precios', 'articulo' => 'ARTICULO', 'precio' => 'PRECIO', 'nivel_columna' => 'NIVEL_PRECIO', 'nivel' => 'INST.PUB. U$'],
         );
 
-        // Nivel sin precio para "Tubo cobre": no aparece, pero se sabe que existe.
-        $this->assertSame([], $catalogo('INST.PUB. U$')->buscar('tubo'));
-        $this->assertSame(1, $catalogo('INST.PUB. U$')->contarSinPrecio('tubo'));
-        $this->assertSame(0, $catalogo('INST.PUB. U$')->contarSinPrecio('inexistente'));
+        $res = $catalogo->buscar('tubo');
+        $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $res));
+        $this->assertSame(0.0, $res[0]->precio);
+    }
 
-        // Con nivel que sí tiene precio, aparece y no cuenta como "sin precio".
-        $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $catalogo('FARMACIA')->buscar('tubo')));
-        $this->assertSame(0, $catalogo('FARMACIA')->contarSinPrecio('tubo'));
+    public function test_lee_factor_y_unidad_de_empaque(): void
+    {
+        Schema::table('inv_art', function ($t) {
+            $t->decimal('FACTOR', 10, 2)->nullable();
+            $t->string('UNI_EMP')->nullable();
+        });
+        DB::table('inv_art')->where('CVE_ART', 'A-100')->update(['FACTOR' => 50, 'UNI_EMP' => 'VIA']);
+
+        $catalogo = new SqlServerCatalogo(
+            db: DB::connection(),
+            tabla: 'inv_art',
+            columnas: ['codigo' => 'CVE_ART', 'descripcion' => 'DESCR', 'unidad' => 'UNI_MED', 'precio' => 'PRECIO1', 'existencia' => 'EXIST', 'factor' => 'FACTOR', 'unidad_empaque' => 'UNI_EMP'],
+        );
+
+        $a = $catalogo->encontrar('A-100');
+        $this->assertSame(50.0, $a->factor);
+        $this->assertSame('VIA', $a->unidadEmpaque);
+        $this->assertTrue($a->tieneEmpaque());
     }
 
     public function test_codigos_numericos_se_envian_como_texto(): void

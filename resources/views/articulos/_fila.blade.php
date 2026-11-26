@@ -15,16 +15,34 @@
             <p class="text-foot text-label-2 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span class="num text-[15px] font-bold">{{ $a->codigo }}</span>
                 <span aria-hidden="true">·</span>
-                <x-existencia :existencia="$a->existencia" :unidad="$a->unidad" />
+                <x-existencia :existencia="$a->existencia" :unidad="$a->unidad" :factor="$a->factor" :unidad-empaque="$a->unidadEmpaque" />
             </p>
         </div>
     </div>
 
+    @php
+        // En cajas por defecto (con fracción); si ya está en el pedido, en el modo en que se capturó.
+        $modo = $a->tieneEmpaque() ? ($item['modo'] ?? 'caja') : 'caja';
+        $enUnidades = $modo === 'unidad';
+    @endphp
     <div class="flex items-center justify-between gap-3 sm:justify-end">
-        <p>
-            <span class="price">{{ dinero($a->precio) }}</span>
-            @if ($a->unidad)<span class="text-foot text-label-2">/ {{ $a->unidad }}</span>@endif
+        <p class="leading-tight">
+            @if ($a->precio > 0)
+                @if ($a->tieneEmpaque())
+                    <span class="price">{{ dinero($a->precio) }}</span><span class="text-foot text-label-2"> / {{ $a->unidad }}</span>
+                    <span class="text-foot text-label-2 block">{{ dinero($a->precio / $a->factor) }} / {{ $a->unidadEmpaque ?: 'UND' }} · {{ cantidad($a->factor) }} por {{ $a->unidad }}</span>
+                @else
+                    <span class="price">{{ dinero($a->precio) }}</span>
+                    @if ($a->unidad)<span class="text-foot text-label-2">/ {{ $a->unidad }}</span>@endif
+                @endif
+            @else
+                <span class="badge bg-warn-soft text-warn">Sin precio</span>
+                <span class="text-foot text-label-2 block pt-1">Se pone en el pedido</span>
+            @endif
         </p>
-        <x-stepper :codigo="$a->codigo" :cantidad="$enPedido" :max="$a->maximoPedible()" />
+        <x-stepper :codigo="$a->codigo" :modo="$modo"
+                   :cantidad="$item ? \App\Pedidos\Carrito::capturada($item) : 0"
+                   :max="$enUnidades ? $a->maximoUnidades() : $a->maximoPedible()"
+                   :etiqueta="$a->tieneEmpaque() ? ($enUnidades ? ($a->unidadEmpaque ?: 'UND') : $a->unidad) : null" />
     </div>
 </li>

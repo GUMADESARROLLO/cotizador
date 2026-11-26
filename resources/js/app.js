@@ -13,7 +13,25 @@ const CSRF = $('meta[name="csrf-token"]')?.content;
 const CURRENCY = $('meta[name="currency"]')?.content ?? '$';
 const money = (n) =>
     CURRENCY + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const qty = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const qty = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 4 });
+// Cajas con fracción (hasta 4 decimales, hacia abajo) y unidades enteras.
+const bajar4 = (n) => Math.floor(Math.round(n * 1e6) / 100) / 1e4;
+const unidadesDe = (cajas, factor) => Math.floor(Math.round(cajas * factor * 1e6) / 1e6);
+const numero = (v) => Number(String(v ?? '').replace(/,/g, '').trim());
+
+async function postJson(url, body) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-CSRF-TOKEN': CSRF,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(body),
+    });
+    return { res, data: await res.json() };
+}
 
 /* ---------- Aviso (HUD) ---------- */
 let toastTimer;
@@ -139,18 +157,20 @@ function paintStepper(st, value) {
     const input = $('[data-qty-input]', st);
     if (input) input.value = value;
     const plus = $('[data-step="1"]', st);
-    if (plus) plus.disabled = value >= max;
+    if (plus) plus.disabled = value + 1 > max;
     const add = $('[data-step="add"]', st);
     if (add) {
         st.toggleAttribute('data-empty', value === 0);
-        add.disabled = max < 1;
-        add.textContent = max < 1 ? 'Agotado' : 'Agregar';
+        add.disabled = max <= 0;
+        add.textContent = max <= 0 ? 'Agotado' : 'Agregar';
     }
 }
 
 function setQty(st, wanted) {
     const max = Number(st.dataset.max);
-    let value = Math.max(0, Math.floor(Number(wanted) || 0));
+    // En unidades (viales…) enteras; en cajas se admite fracción.
+    const n = numero(wanted) || 0;
+    let value = Math.max(0, st.dataset.modo === 'unidad' ? Math.floor(n) : bajar4(n));
     if (value > max) {
         value = max;
         haptic();
@@ -170,17 +190,7 @@ function sync(st, value) {
             pending.delete(codigo);
             inflight++;
             try {
-                const res = await fetch('/pedido/items', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Accept: 'application/json',
-                        'X-CSRF-TOKEN': CSRF,
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: JSON.stringify({ codigo, cantidad: value }),
-                });
-                const data = await res.json();
+                const { res, data } = await postJson('/pedido/items', { codigo, cantidad: value, modo: st.dataset.modo });
                 if (data.resumen) renderResumen(data.resumen);
                 if (res.status === 409) {
                     location.href = '/clientes';
@@ -199,12 +209,6 @@ function sync(st, value) {
                 if (data.ajustado) {
                     haptic();
                     toast(data.message);
-                }
-                const row = $(`[data-cart-row="${CSS.escape(codigo)}"]`);
-                if (row) {
-                    const sub = $('[data-subtotal]', row);
-                    if (sub) sub.textContent = money(data.subtotal);
-                    if (data.cantidad === 0) removeRow(codigo);
                 }
             } catch {
                 haptic();
@@ -231,57 +235,24 @@ function removeRow(codigo) {
     }, 200);
 }
 
-/* ---------- Lote de despacho: panel inferior (bottom sheet) ---------- */
-const fecha = (iso) => (iso ? iso.split('-').reverse().join('/') : 's/f'); // 2027-09-01 → 01/09/2027
-const escapar = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-
-function initLotes() {
-    const sheet = $('[data-lote-sheet]');
-    if (!sheet) return;
+/*
+ * Panel inferior (bottom sheet) reutilizable sobre un <dialog>: abre y cierra
+ * por el mismo camino, se arrastra hacia abajo para cerrar (1:1 con el dedo,
+ * decide por distancia o velocidad), se cierra con Cancelar, tocando fuera o Escape.
+ */
+function hoja(sheet) {
     const panel = $('[data-sheet-panel]', sheet);
-    const lista = $('[data-sheet-lista]', sheet);
     let trigger = null;
     let cerrando = false;
 
-    function abrir(btn) {
-        trigger = btn;
-        const lotes = JSON.parse(btn.dataset.lotes);
-        const elegido = btn.dataset.seleccionado;
-        const unidad = btn.dataset.unidad || '';
-        $('[data-sheet-titulo]', sheet).textContent = btn.dataset.descripcion;
-
-        lista.innerHTML = lotes
-            .map(
-                (l, i) => `
-            <li class="border-line border-b last:border-b-0">
-                <button type="button" role="option" aria-selected="${l.lote === elegido}" data-lote="${escapar(l.lote)}"
-                        class="lote-opcion pressable flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left">
-                    <span class="min-w-0 flex-1">
-                        <span class="flex flex-wrap items-center gap-2">
-                            <span class="num text-ink text-[19px] font-extrabold">${escapar(l.lote)}</span>
-                            ${i === 0 ? '<span class="badge bg-cyan text-navy">Sugerido</span>' : ''}
-                        </span>
-                        <span class="text-label-2 mt-0.5 block text-[14px]">
-                            Vence <span class="num text-ink text-[16px] font-bold">${fecha(l.vence)}</span>
-                            · <span class="num text-ink text-[16px] font-bold">${qty(l.maximo)}</span> ${escapar(unidad)} disponibles
-                        </span>
-                    </span>
-                    <span class="grid size-7 shrink-0 place-items-center rounded-full ${l.lote === elegido ? 'bg-royal text-white' : 'ring-line ring-2'}" aria-hidden="true">
-                        ${l.lote === elegido ? '<svg viewBox="0 0 24 24" class="size-4" fill="currentColor"><path d="M9.55 17.6a1 1 0 0 1-.7-.3l-4.2-4.2a1 1 0 1 1 1.4-1.4l3.5 3.5 8.3-8.3a1 1 0 1 1 1.4 1.4l-9 9a1 1 0 0 1-.7.3Z"/></svg>' : ''}
-                    </span>
-                </button>
-            </li>`,
-            )
-            .join('');
-
+    function abrir(desde) {
+        trigger = desde;
         cerrando = false;
         panel.style.transform = '';
         sheet.showModal();
         requestAnimationFrame(() => sheet.classList.add('is-open'));
-        $('[aria-selected="true"]', lista)?.focus({ preventScroll: true });
     }
 
-    // Sale por el mismo camino por el que entró (hacia abajo), desde donde esté.
     function cerrar() {
         if (!sheet.open || cerrando) return;
         cerrando = true;
@@ -296,75 +267,17 @@ function initLotes() {
         setTimeout(fin, 450); // por si no hay transición (movimiento reducido)
     }
 
-    async function elegir(lote) {
-        const codigo = trigger.dataset.codigo;
-        if (lote === trigger.dataset.seleccionado) return cerrar();
-        lista.querySelectorAll('button').forEach((b) => (b.disabled = true));
-        inflight++;
-        try {
-            const res = await fetch('/pedido/items/lote', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                    'X-CSRF-TOKEN': CSRF,
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: JSON.stringify({ codigo, lote }),
-            });
-            const data = await res.json();
-            if (data.resumen) renderResumen(data.resumen);
-            if (!res.ok) {
-                haptic();
-                toast(data.message ?? 'No se pudo cambiar el lote.');
-                return;
-            }
-            // Botón del artículo con el lote nuevo.
-            trigger.dataset.seleccionado = data.lote.lote;
-            $('[data-lote-texto]', trigger).innerHTML =
-                `<span class="num block text-[17px] leading-tight font-bold">${escapar(data.lote.lote)}</span>` +
-                `<span class="text-label-2 block">vence <span class="num text-ink text-[16px] font-bold">${fecha(data.lote.vence)}</span>` +
-                ` · <span class="num text-ink text-[16px] font-bold">${qty(data.lote.maximo)}</span> ${escapar(trigger.dataset.unidad || '')} disp.</span>`;
-            // El tope de la cantidad ahora es la existencia del lote elegido.
-            $$(`[data-stepper][data-codigo="${CSS.escape(codigo)}"]`).forEach((s) => {
-                s.dataset.max = data.maximo;
-                paintStepper(s, data.cantidad);
-            });
-            const sub = $('[data-subtotal]', $(`[data-cart-row="${CSS.escape(codigo)}"]`));
-            if (sub) sub.textContent = money(data.subtotal);
-            cerrar();
-            if (data.ajustado) {
-                haptic();
-                toast(data.message);
-            }
-        } catch {
-            toast('Sin conexión. El lote no se cambió.');
-        } finally {
-            inflight--;
-            lista.querySelectorAll('button').forEach((b) => (b.disabled = false));
-        }
-    }
-
-    document.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-lote-trigger]');
-        if (btn) abrir(btn);
-    });
-    lista.addEventListener('click', (e) => {
-        const op = e.target.closest('[data-lote]');
-        if (op && !op.disabled) elegir(op.dataset.lote);
-    });
-    $('[data-sheet-cerrar]', sheet).addEventListener('click', cerrar);
+    $('[data-sheet-cerrar]', sheet)?.addEventListener('click', cerrar);
     sheet.addEventListener('click', (e) => e.target === sheet && cerrar()); // tocar fuera
     sheet.addEventListener('cancel', (e) => {
         e.preventDefault(); // Escape: cerrar con animación
         cerrar();
     });
 
-    // Arrastrar hacia abajo para cerrar: sigue al dedo 1:1 y decide por distancia o velocidad.
     let inicio = null;
     sheet.querySelectorAll('[data-sheet-grab]').forEach((zona) => {
         zona.addEventListener('pointerdown', (e) => {
-            inicio = { y: e.clientY, t: e.timeStamp, ultY: e.clientY, ultT: e.timeStamp, vel: 0 };
+            inicio = { y: e.clientY, ultY: e.clientY, ultT: e.timeStamp, vel: 0 };
             zona.setPointerCapture(e.pointerId);
             sheet.classList.add('is-dragging');
         });
@@ -389,6 +302,119 @@ function initLotes() {
         };
         zona.addEventListener('pointerup', soltar);
         zona.addEventListener('pointercancel', soltar);
+    });
+
+    return { abrir, cerrar };
+}
+
+/* ---------- Fecha del pedido: calendario en panel inferior ---------- */
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+// Fechas locales sin hora (evita desfases de zona horaria con new Date('YYYY-MM-DD')).
+const aFecha = (iso) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+};
+const aIso = (f) => `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+const fechaLarga = (f) => `${DIAS[f.getDay()]} ${f.getDate()} de ${MESES[f.getMonth()]} de ${f.getFullYear()}`;
+const sumarDias = (f, n) => new Date(f.getFullYear(), f.getMonth(), f.getDate() + n);
+
+function initFecha() {
+    const sheet = $('[data-fecha-sheet]');
+    const trigger = $('[data-fecha-trigger]');
+    if (!sheet || !trigger) return;
+    const h = hoja(sheet);
+    const grid = $('[data-cal-grid]', sheet);
+    const min = aFecha(trigger.dataset.min);
+    const max = aFecha(trigger.dataset.max);
+    const hoy = aFecha(trigger.dataset.min);
+    let elegida = aFecha(trigger.dataset.fecha);
+    let vista = new Date(elegida.getFullYear(), elegida.getMonth(), 1);
+
+    const enRango = (f) => f >= min && f <= max;
+
+    function dibujar() {
+        $('[data-cal-elegida]', sheet).textContent = fechaLarga(elegida);
+        $('[data-cal-titulo]', sheet).textContent = `${MESES[vista.getMonth()]} ${vista.getFullYear()}`;
+        $('[data-cal-mes="-1"]', sheet).disabled = vista <= new Date(min.getFullYear(), min.getMonth(), 1);
+        $('[data-cal-mes="1"]', sheet).disabled = vista >= new Date(max.getFullYear(), max.getMonth(), 1);
+
+        // Semana de lunes a domingo.
+        const encabezado = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+            .map((d) => `<span class="text-label-2 pb-1 text-[12px] font-bold" aria-hidden="true">${d}</span>`)
+            .join('');
+        const huecos = (vista.getDay() + 6) % 7;
+        const diasMes = new Date(vista.getFullYear(), vista.getMonth() + 1, 0).getDate();
+        let celdas = '<span></span>'.repeat(huecos);
+        for (let d = 1; d <= diasMes; d++) {
+            const f = new Date(vista.getFullYear(), vista.getMonth(), d);
+            const iso = aIso(f);
+            const sel = iso === aIso(elegida);
+            const esHoy = iso === aIso(hoy);
+            celdas += `<button type="button" data-dia="${iso}" ${enRango(f) ? '' : 'disabled'} aria-pressed="${sel}"
+                aria-label="${fechaLarga(f)}${esHoy ? ', hoy' : ''}"
+                class="cal-dia pressable mx-auto grid size-11 place-items-center rounded-full text-[17px] font-semibold
+                       ${!enRango(f) ? 'text-label-3 font-normal' : sel ? 'bg-royal text-white' : esHoy ? 'text-royal ring-cyan ring-2' : 'text-ink'}">${d}</button>`;
+        }
+        grid.innerHTML = encabezado + celdas;
+
+        // Accesos rápidos: el caso típico es armarlo hoy con fecha del lunes.
+        const proxLunes = sumarDias(hoy, ((8 - hoy.getDay()) % 7) || 7);
+        const rapidos = [
+            ['Hoy', hoy],
+            ['Mañana', sumarDias(hoy, 1)],
+            [`Próximo lunes ${proxLunes.getDate()}`, proxLunes],
+        ];
+        $('[data-cal-rapidos]', sheet).innerHTML = rapidos
+            .filter(([, f]) => enRango(f))
+            .map(
+                ([t, f]) => `<button type="button" data-dia="${aIso(f)}" aria-pressed="${aIso(f) === aIso(elegida)}"
+                    class="pressable rounded-full px-4 py-2 text-[14px] font-bold ${aIso(f) === aIso(elegida) ? 'bg-royal text-white' : 'bg-mist text-royal'}">${t}</button>`,
+            )
+            .join('');
+    }
+
+    async function elegir(iso) {
+        sheet.querySelectorAll('[data-dia]').forEach((b) => (b.disabled = true));
+        try {
+            const res = await fetch('/pedido/fecha', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ fecha: iso }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                haptic();
+                toast(data.errors?.fecha?.[0] ?? data.message ?? 'No se pudo cambiar la fecha.');
+                dibujar();
+                return;
+            }
+            elegida = aFecha(data.fecha);
+            trigger.dataset.fecha = data.fecha;
+            $('[data-fecha-texto]', trigger).textContent = data.corta;
+            dibujar();
+            h.cerrar();
+        } catch {
+            toast('Sin conexión. La fecha no se cambió.');
+            dibujar();
+        }
+    }
+
+    trigger.addEventListener('click', () => {
+        vista = new Date(elegida.getFullYear(), elegida.getMonth(), 1);
+        dibujar();
+        h.abrir(trigger);
+        $('[aria-pressed="true"]', grid)?.focus({ preventScroll: true });
+    });
+    sheet.querySelectorAll('[data-cal-mes]').forEach((b) =>
+        b.addEventListener('click', () => {
+            vista = new Date(vista.getFullYear(), vista.getMonth() + Number(b.dataset.calMes), 1);
+            dibujar();
+        }),
+    );
+    sheet.addEventListener('click', (e) => {
+        const dia = e.target.closest('[data-dia]');
+        if (dia && !dia.disabled) elegir(dia.dataset.dia);
     });
 }
 
@@ -419,6 +445,210 @@ function initSteppers() {
     });
     document.addEventListener('focusin', (e) => {
         if (e.target.matches('[data-qty-input]')) e.target.select();
+    });
+}
+
+/*
+ * Editar un artículo del pedido (panel inferior): cantidad, precio y lote en
+ * un solo lugar. Cajas y unidades están enlazadas (se escribe en cualquiera:
+ * 2,800 TBL ⇄ 100 CJA), igual el precio (C$32.93 / TBL ⇄ C$922.04 / CJA).
+ * Al guardar, el servidor valida todo y devuelve la fila ya dibujada.
+ */
+const vence = (iso) => (iso ? iso.split('-').reverse().join('/') : 's/f'); // 2027-09-01 → 01/09/2027
+const escapar = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const r4 = (n) => Math.round(n * 1e4) / 1e4;
+const textoNum = (n) => (Number.isFinite(n) && n > 0 ? String(r4(n)) : '');
+
+function initEditor() {
+    const sheet = $('[data-articulo-sheet]');
+    if (!sheet) return;
+    const h = hoja(sheet);
+    const form = $('[data-articulo-form]', sheet);
+    const el = (k) => $(`[data-ed-${k}]`, sheet);
+    const inCajas = el('cajas');
+    const inUnidades = el('unidades');
+    const inPCaja = el('precio-caja');
+    const inPUnidad = el('precio-unidad');
+    const listaLotes = el('lotes');
+
+    let a = null; // datos del artículo
+    let fila = null;
+    let modo = 'caja'; // en qué campo se escribió la cantidad
+    let por = 'caja'; // en qué campo se escribió el precio
+    let precioTocado = false;
+    let usarNivel = false;
+    let lote = null;
+
+    const factor = () => a.factor || 1;
+    const empaque = () => factor() > 1;
+    const disponible = () => (lote ? a.lotes.find((l) => l.lote === lote)?.disponible ?? 0 : a.existencia);
+    const cajas = () => (modo === 'unidad' ? Math.floor(numero(inUnidades.value) || 0) / factor() : numero(inCajas.value) || 0);
+    const precioCaja = () => (por === 'unidad' ? (numero(inPUnidad.value) || 0) * factor() : numero(inPCaja.value) || 0);
+
+    function pintar() {
+        // Disponible del lote elegido (o de la bodega) y aviso si se pasa.
+        const disp = disponible();
+        const excede = cajas() > disp + 1e-6;
+        $$('.ed-campo', el('cantidades')).forEach((c) => c.classList.toggle('is-excede', excede));
+        const dispTxt = `${qty(bajar4(disp))} ${a.unidad}` + (empaque() ? ` · ${qty(unidadesDe(disp, factor()))} ${a.unidad_empaque}` : '');
+        el('disponible').textContent = (excede ? 'Se pasa de lo disponible: ' : 'Disponible: ') + dispTxt;
+        el('disponible').classList.toggle('text-danger', excede);
+
+        const nivel = a.precio_nivel;
+        el('nivel-texto').textContent = nivel > 0 ? `Nivel del cliente: ${money(nivel)} / ${a.unidad}` : 'Sin precio en el nivel del cliente.';
+        const manual = !usarNivel && (precioTocado ? Math.abs(precioCaja() - nivel) > 0.00005 : a.manual);
+        el('usar-nivel').hidden = !(nivel > 0 && manual);
+
+        el('subtotal').textContent = money(Math.min(cajas(), disp) * precioCaja());
+    }
+
+    function pintarLotes() {
+        el('lotes-grupo').hidden = !a.lotes.length;
+        listaLotes.innerHTML = a.lotes
+            .map((l, i) => {
+                const sel = l.lote === lote;
+                const disp = `${qty(bajar4(l.disponible))} ${escapar(a.unidad)}` + (empaque() ? ` · ${qty(unidadesDe(l.disponible, factor()))} ${escapar(a.unidad_empaque)}` : '');
+                return `<li class="border-line border-b last:border-b-0">
+                    <button type="button" role="radio" aria-checked="${sel}" data-ed-lote="${escapar(l.lote)}"
+                            class="lote-opcion pressable flex min-h-14 w-full items-center gap-3 px-4 py-2.5 text-left">
+                        <span class="min-w-0 flex-1">
+                            <span class="flex flex-wrap items-center gap-2">
+                                <span class="num text-ink text-[18px] font-extrabold">${escapar(l.lote)}</span>
+                                ${i === 0 ? '<span class="badge bg-cyan text-navy">Sugerido</span>' : ''}
+                            </span>
+                            <span class="text-label-2 block text-[13px]">Vence <b class="num text-ink text-[15px]">${vence(l.vence)}</b> · <span class="num text-[15px] font-bold">${disp}</span></span>
+                        </span>
+                        <span class="grid size-6 shrink-0 place-items-center rounded-full ${sel ? 'bg-royal text-white' : 'ring-line ring-2'}" aria-hidden="true">
+                            ${sel ? '<svg viewBox="0 0 24 24" class="size-4" fill="currentColor"><path d="M9.55 17.6a1 1 0 0 1-.7-.3l-4.2-4.2a1 1 0 1 1 1.4-1.4l3.5 3.5 8.3-8.3a1 1 0 1 1 1.4 1.4l-9 9a1 1 0 0 1-.7.3Z"/></svg>' : ''}
+                        </span>
+                    </button>
+                </li>`;
+            })
+            .join('');
+    }
+
+    function abrir(btn) {
+        fila = btn;
+        a = JSON.parse(btn.dataset.articulo);
+        modo = empaque() ? a.modo : 'caja';
+        por = 'caja';
+        precioTocado = false;
+        usarNivel = false;
+        lote = a.lote;
+
+        el('codigo').textContent = a.codigo;
+        el('titulo').textContent = a.descripcion;
+        el('u-caja').textContent = a.unidad;
+        el('u-interna').textContent = a.unidad_empaque;
+        el('p-caja').textContent = `/ ${a.unidad}`;
+        el('p-interna').textContent = `/ ${a.unidad_empaque}`;
+        $$('[data-ed-solo-empaque]', sheet).forEach((x) => (x.hidden = !empaque()));
+        inCajas.value = textoNum(a.cajas);
+        inUnidades.value = textoNum(a.unidades);
+        inPCaja.value = textoNum(a.precio);
+        inPUnidad.value = textoNum(a.precio / factor());
+        pintarLotes();
+        pintar();
+        h.abrir(btn);
+    }
+
+    // Cantidad: lo escrito en un campo actualiza el otro.
+    inCajas.addEventListener('input', () => {
+        modo = 'caja';
+        inUnidades.value = textoNum((numero(inCajas.value) || 0) * factor());
+        pintar();
+    });
+    inUnidades.addEventListener('input', () => {
+        modo = 'unidad';
+        inCajas.value = textoNum(Math.round(((numero(inUnidades.value) || 0) / factor()) * 1e8) / 1e8);
+        pintar();
+    });
+    // Precio: igual, por caja ⇄ por unidad.
+    inPCaja.addEventListener('input', () => {
+        por = 'caja';
+        precioTocado = true;
+        usarNivel = false;
+        inPUnidad.value = textoNum((numero(inPCaja.value) || 0) / factor());
+        pintar();
+    });
+    inPUnidad.addEventListener('input', () => {
+        por = 'unidad';
+        precioTocado = true;
+        usarNivel = false;
+        inPCaja.value = textoNum((numero(inPUnidad.value) || 0) * factor());
+        pintar();
+    });
+    $$('input', form).forEach((i) => i.addEventListener('focus', () => i.select()));
+
+    el('usar-nivel').addEventListener('click', () => {
+        usarNivel = true;
+        precioTocado = false;
+        inPCaja.value = textoNum(a.precio_nivel);
+        inPUnidad.value = textoNum(a.precio_nivel / factor());
+        pintar();
+    });
+    listaLotes.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ed-lote]');
+        if (!b) return;
+        lote = b.dataset.edLote;
+        pintarLotes();
+        pintar();
+    });
+
+    async function guardar(quitar = false) {
+        const cantidad = quitar ? 0 : modo === 'unidad' ? Math.floor(numero(inUnidades.value)) : numero(inCajas.value);
+        if (!quitar && !(cantidad > 0)) return toast('Escribe la cantidad (o usa Quitar).');
+        const body = { codigo: a.codigo, cantidad, modo, lote };
+        if (!quitar) {
+            if (usarNivel) body.precio_nivel = true;
+            else if (precioTocado) {
+                const p = por === 'unidad' ? numero(inPUnidad.value) : numero(inPCaja.value);
+                if (!(p > 0)) return toast('Escribe un precio mayor que cero.');
+                Object.assign(body, { precio: p, por });
+            }
+        }
+
+        $$('button', form).forEach((b) => (b.disabled = true));
+        inflight++;
+        try {
+            const { res, data } = await postJson('/pedido/items/editar', body);
+            if (data.resumen) renderResumen(data.resumen);
+            if (res.status === 409) return void (location.href = '/clientes');
+            if (!res.ok) {
+                haptic();
+                toast(data.errors ? Object.values(data.errors)[0][0] : data.message ?? 'No se pudo guardar.');
+                if (data.eliminado) {
+                    h.cerrar();
+                    removeRow(a.codigo);
+                }
+                return;
+            }
+            h.cerrar();
+            if (data.eliminado) return removeRow(a.codigo);
+            // La fila nueva viene dibujada del servidor (mismos textos que al cargar).
+            const li = fila.closest('[data-cart-row]');
+            li.insertAdjacentHTML('afterend', data.html);
+            li.remove();
+            if (data.ajustado) {
+                haptic();
+                toast(data.message);
+            }
+        } catch {
+            toast('Sin conexión. No se guardó el cambio.');
+        } finally {
+            inflight--;
+            $$('button', form).forEach((b) => (b.disabled = false));
+        }
+    }
+
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        guardar();
+    });
+    el('quitar').addEventListener('click', () => guardar(true));
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-editar-articulo]');
+        if (btn) abrir(btn);
     });
 }
 
@@ -503,7 +733,8 @@ function initSoftland() {
 }
 
 initSteppers();
-initLotes();
+initEditor();
+initFecha();
 initConfirmForm();
 initSoftland();
 if (window.__aviso) toast(window.__aviso);

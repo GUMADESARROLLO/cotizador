@@ -31,6 +31,10 @@ return [
         'codigo' => 'ARTICULO',
         'descripcion' => 'DESCRIPCION',
         'unidad' => 'UNIDAD_ALMACEN',
+        // Empaque: FACTOR_EMPAQUE unidades (viales, tabletas…) de UNIDAD_EMPAQUE por caja.
+        // Ej. 13705183: 50 VIA por CJA → 2,800 viales = 56 cajas.
+        'factor' => 'FACTOR_EMPAQUE',
+        'unidad_empaque' => 'UNIDAD_EMPAQUE',
         // Solo se usan si no hay nivel de precio / tabla de existencias (abajo).
         'precio' => 'PRECIO_BASE_LOCAL',
         'existencia' => 'EXISTENCIA_MINIMA',
@@ -72,8 +76,8 @@ return [
     // Selección de artículos (alias "a" = umk.ARTICULO).
     'where_raw' => "a.ACTIVO = 'S' AND LEN(a.ARTICULO) = 8 AND ISNULL(a.CLASIFICACION_1, '') <> '7'",
 
-    // Además, solo se muestran los que tienen precio en el nivel del cliente (alias "p").
-    'con_precio_raw' => 'p.precio > 0',
+    // Se muestran también los que no tienen precio en el nivel del cliente:
+    // el vendedor pone el precio a mano en el pedido.
 
     'search_limit' => 30,
 

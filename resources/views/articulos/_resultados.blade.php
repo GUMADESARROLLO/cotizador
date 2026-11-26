@@ -10,23 +10,14 @@
     </div>
 @elseif (! count($articulos))
     <div class="flex flex-col items-center px-8 pt-10 pb-6 text-center">
-        @if ($sinPrecio > 0)
-            <p class="text-title font-extrabold text-white">Sin precio para este cliente</p>
-            <p class="text-sub text-on-royal-soft mt-1 max-w-xs">
-                {{ $sinPrecio === 1 ? 'Hay 1 artículo' : "Hay {$sinPrecio} artículos" }} que coinciden con “{{ $q }}”,
-                pero no tienen precio en el nivel <strong class="text-white">{{ $nivel ?: 'del cliente' }}</strong>.
-                Para pedirlos, el cliente debe tener un nivel con precio.
-            </p>
-        @else
-            <p class="text-title font-extrabold text-white">Sin resultados</p>
-            <p class="text-sub text-on-royal-soft mt-1 max-w-xs">No hay artículos que coincidan con “{{ $q }}”.</p>
-        @endif
+        <p class="text-title font-extrabold text-white">Sin resultados</p>
+        <p class="text-sub text-on-royal-soft mt-1 max-w-xs">No hay artículos que coincidan con “{{ $q }}”.</p>
     </div>
 @else
     <p class="section-label">{{ count($articulos) }} resultado(s)</p>
     <ul class="group-list animate-card-in">
         @foreach ($articulos as $a)
-            @include('articulos._fila', ['a' => $a, 'enPedido' => $enCarrito[$a->codigo] ?? 0, 'imagen' => $imagenes[$a->codigo] ?? null, 'prioridad' => $loop->index < 4])
+            @include('articulos._fila', ['a' => $a, 'item' => $enCarrito[$a->codigo] ?? null, 'imagen' => $imagenes[$a->codigo] ?? null, 'prioridad' => $loop->index < 4])
         @endforeach
     </ul>
 @endif

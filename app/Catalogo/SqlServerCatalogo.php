@@ -28,8 +28,6 @@ class SqlServerCatalogo implements Catalogo
         private ?array $stock = null,
         /** @var array{table:?string,articulo:string,precio:string,nivel_columna:string,nivel:string,where_raw:?string}|null */
         private ?array $precio = null,
-        // Condición "tiene precio en el nivel" (alias "p"), p. ej. "p.precio > 0".
-        private ?string $conPrecioRaw = null,
     ) {}
 
     public function buscar(string $termino, ?int $limite = null): array
@@ -50,19 +48,6 @@ class SqlServerCatalogo implements Catalogo
             ->get()
             ->map(Articulo::fromRow(...))
             ->all();
-    }
-
-    public function contarSinPrecio(string $termino): int
-    {
-        $termino = trim($termino);
-        if ($termino === '' || ! $this->conPrecioRaw) {
-            return 0;
-        }
-
-        // Mismos artículos de la búsqueda, pero solo los que NO tienen precio en el nivel.
-        return $this->filtrar($this->base(conPrecio: false), $termino)
-            ->whereRaw("(p.precio IS NULL OR NOT ({$this->conPrecioRaw}))")
-            ->count();
     }
 
     /** Cada palabra debe aparecer en el código o en la descripción. */
@@ -112,7 +97,7 @@ class SqlServerCatalogo implements Catalogo
         return $resultado;
     }
 
-    private function base(bool $conPrecio = true): Builder
+    private function base(): Builder
     {
         $c = $this->columnas;
 
@@ -121,6 +106,14 @@ class SqlServerCatalogo implements Catalogo
             "a.{$c['descripcion']} as descripcion",
             "a.{$c['unidad']} as unidad",
         ]);
+
+        // Empaque (opcional): unidades internas por caja.
+        if ($c['factor'] ?? null) {
+            $query->addSelect("a.{$c['factor']} as factor");
+        }
+        if ($c['unidad_empaque'] ?? null) {
+            $query->addSelect("a.{$c['unidad_empaque']} as unidad_empaque");
+        }
 
         if ($this->precio['table'] ?? null) {
             // Precio del nivel configurado (alias "p"), uno por artículo.
@@ -139,7 +132,8 @@ class SqlServerCatalogo implements Catalogo
                 ->groupBy('ap.'.$p['articulo']);
 
             $query->leftJoinSub($sub, 'p', fn ($j) => $j->whereRaw($this->unir('p')))
-                ->addSelect('p.precio as precio');
+                // Sin precio en el nivel también se muestra (precio 0): el vendedor lo pone a mano.
+                ->selectRaw('COALESCE('.$this->wrap('p.precio').', 0) as precio');
         } else {
             $query->addSelect("a.{$c['precio']} as precio");
         }
@@ -164,10 +158,6 @@ class SqlServerCatalogo implements Catalogo
 
         if ($this->whereRaw) {
             $query->whereRaw($this->whereRaw);
-        }
-
-        if ($conPrecio && $this->conPrecioRaw) {
-            $query->whereRaw($this->conPrecioRaw);
         }
 
         return $query;

@@ -49,6 +49,7 @@ class SoftlandController extends Controller
                 items: $carrito->items(),
                 ahora: now(),
                 observaciones: $carrito->observaciones(),
+                fechaPedido: $carrito->fecha(),
             );
             $error = null;
         } catch (Throwable $e) {

@@ -42,11 +42,6 @@ class DemoCatalogo implements Catalogo
         return array_slice(array_values($res), 0, $limite ?? 30);
     }
 
-    public function contarSinPrecio(string $termino): int
-    {
-        return 0; // en demo todos los artículos tienen precio
-    }
-
     public function encontrar(string $codigo): ?Articulo
     {
         return $this->articulos[$codigo] ?? null;
@@ -74,6 +69,8 @@ class DemoCatalogo implements Catalogo
             $f('COD-0750', 'Codo PVC 90° 3/4"', 'PZA', 6.80, 410),
             $f('CIN-0001', 'Cinta de aislar negra 18 mm', 'PZA', 18.00, 220),
             $f('BRO-0001', 'Broca para concreto 1/4"', 'PZA', 42.00, 1),
+            // Con empaque: 50 viales por caja (como 13705183 en Softland).
+            ['codigo' => 'VIA-0050', 'descripcion' => 'Ampicilina 1 g vial', 'unidad' => 'CJA', 'precio' => 1646.50, 'existencia' => 60.26, 'factor' => 50, 'unidad_empaque' => 'VIA'],
         ];
     }
 }

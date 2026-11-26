@@ -49,7 +49,7 @@ class LoteTest extends TestCase
         $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 5000])
             ->assertOk()
             ->assertJson(['cantidad' => 3000, 'maximo' => 3000, 'ajustado' => true, 'lote' => ['lote' => 'F411250901']])
-            ->assertJsonPath('message', 'Solo hay 3,000 disponibles en el lote F411250901.');
+            ->assertJsonPath('message', 'Solo hay 3,000 CJA disponibles en el lote F411250901.');
     }
 
     public function test_cambiar_de_lote_a_mano(): void
@@ -78,13 +78,11 @@ class LoteTest extends TestCase
         $this->postJson('/pedido/items', ['codigo' => '11715061', 'cantidad' => 10]);
 
         $html = $this->get('/pedido')->assertOk()
-            ->assertSee('data-lote-trigger', false)
-            ->assertSee('data-lote-sheet', false)
-            ->assertSee('Lote · 2 disponibles')
+            ->assertSee('data-articulo-sheet', false)
             ->getContent();
 
-        // El botón muestra el lote elegido (el sugerido) y lleva los lotes para el panel.
-        $this->assertMatchesRegularExpression('/data-seleccionado="F411250901"/', $html);
+        // La fila muestra el lote elegido (el sugerido) y lleva los lotes para el panel de edición.
+        $this->assertStringContainsString('&quot;lote&quot;:&quot;F411250901&quot;,&quot;lotes&quot;', $html);
         $this->assertStringContainsString('&quot;lote&quot;:&quot;F411251101&quot;', $html);
         $this->assertStringContainsString('&quot;vence&quot;:&quot;2027-11-24&quot;', $html);
         $this->assertStringContainsString('01/09/2027', $html);

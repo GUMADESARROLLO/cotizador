@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['folio', 'cliente_codigo', 'cliente', 'cliente_ruc', 'nivel_precio', 'moneda', 'condicion_pago', 'contacto', 'notas', 'lineas', 'piezas', 'total', 'credito_disponible',
+#[Fillable(['folio', 'fecha_pedido', 'cliente_codigo', 'cliente', 'cliente_ruc', 'nivel_precio', 'moneda', 'condicion_pago', 'contacto', 'notas', 'lineas', 'piezas', 'total', 'credito_disponible',
     'softland_estado', 'softland_pedido', 'softland_enviado_at', 'softland_error'])]
 class Pedido extends Model
 {
@@ -23,6 +23,7 @@ class Pedido extends Model
             'total' => 'float',
             'credito_disponible' => 'float',
             'softland_enviado_at' => 'datetime',
+            'fecha_pedido' => 'date',
         ];
     }
 

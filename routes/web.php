@@ -28,6 +28,9 @@ Route::middleware(RequiereCliente::class)->group(function () {
     Route::get('/pedido', [CarritoController::class, 'index'])->name('carrito.index');
     Route::post('/pedido/items', [CarritoController::class, 'fijar'])->name('carrito.fijar');
     Route::post('/pedido/items/lote', [CarritoController::class, 'lote'])->name('carrito.lote');
+    Route::post('/pedido/items/precio', [CarritoController::class, 'precio'])->name('carrito.precio');
+    Route::post('/pedido/items/editar', [CarritoController::class, 'editar'])->name('carrito.editar');
+    Route::post('/pedido/fecha', [CarritoController::class, 'fecha'])->name('carrito.fecha');
     Route::delete('/pedido', [CarritoController::class, 'vaciar'])->name('carrito.vaciar');
     // Vista previa (solo lectura) de lo que llevaría el pedido en Softland.
     Route::get('/pedido/softland', [SoftlandController::class, 'vistaPrevia'])->name('softland.vista-previa');
