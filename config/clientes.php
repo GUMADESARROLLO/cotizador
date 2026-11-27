@@ -36,6 +36,8 @@ return [
         'nivel_precio' => 'NIVEL_PRECIO',   // define los precios que ve el cliente
         'moneda_nivel' => 'MONEDA_NIVEL',   // L / D: moneda de esos precios
         'moneda' => 'MONEDA',               // COR / DOL: moneda del crédito
+        'telefono1' => 'TELEFONO1',
+        'telefono2' => 'TELEFONO2',
     ],
 
     // Columnas extra donde también se busca (alias "c").

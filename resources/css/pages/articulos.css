@@ -1,0 +1,54 @@
+/* Pantalla Artículos (tabla estilo Inventario de SAC). Usa las clases de componentes de app.css. */
+.tbl-articulos {
+    min-width: 860px;
+}
+.tbl-articulos .art {
+    display: flex;
+    min-width: 260px;
+    align-items: center;
+    gap: 12px;
+}
+.tbl-articulos .art-txt {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+.tbl-articulos .art-nombre {
+    color: var(--color-ink);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-transform: uppercase;
+}
+.tbl-articulos .art-txt .td-sub .num {
+    font-family: var(--font-num);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.tbl-articulos th.th-pedido,
+.tbl-articulos td.td-pedido {
+    width: 1%;
+    text-align: right;
+    white-space: nowrap;
+}
+.tbl-articulos .td-num .td-sub {
+    font-size: 12px;
+    white-space: nowrap;
+}
+.tbl-articulos .thumb {
+    width: 48px;
+    height: 48px;
+}
+.pager .pager-gap {
+    display: inline-grid;
+    min-width: 20px;
+    height: 34px;
+    place-items: center;
+    color: var(--color-ink-soft);
+}
+.tfoot strong {
+    color: var(--color-ink);
+    font-weight: 600;
+}

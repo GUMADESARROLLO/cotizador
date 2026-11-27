@@ -1,54 +1,109 @@
-@if (mb_strlen($q) < 2)
-    @include('clientes._vacio')
-@elseif ($error)
-    <div class="flex flex-col items-center px-8 pt-10 pb-6 text-center">
-        <p class="text-title font-extrabold text-white">Sin conexión a clientes</p>
-        <p class="text-sub text-on-royal-soft mt-1 max-w-xs">No se pudo consultar SQL Server. Intenta de nuevo en un momento.</p>
+@php
+    // Iniciales del avatar; si el nombre empieza por FARM… se salta esa palabra.
+    $iniciales = function (string $nombre): string {
+        $p = preg_split('/\s+/', trim($nombre), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($p) > 1 && str_starts_with(mb_strtoupper($p[0]), 'FARM')) {
+            array_shift($p);
+        }
+
+        return mb_strtoupper(mb_substr($p[0] ?? '', 0, 1).mb_substr($p[1] ?? '', 0, 1));
+    };
+    $desde = $total ? ($pagina - 1) * $per + 1 : 0;
+    $hasta = $desde ? $desde + count($clientes) - 1 : 0;
+    $ini = max(1, min($pagina - 2, $paginas - 4));
+    $ventana = range($ini, min($paginas, $ini + 4));
+@endphp
+@if ($contadores)
+    <span data-contadores data-todos="{{ $contadores['todos'] }}" data-morosos="{{ $contadores['morosos'] }}" data-saldo="{{ $contadores['saldo'] }}" hidden></span>
+@endif
+
+@if ($error)
+    <div class="empty">
+        <strong>Sin conexión a clientes</strong>
+        No se pudo consultar SQL Server. Intenta de nuevo en un momento.
     </div>
 @elseif (! count($clientes))
-    <div class="flex flex-col items-center px-8 pt-10 pb-6 text-center">
-        <p class="text-title font-extrabold text-white">Sin resultados</p>
-        <p class="text-sub text-on-royal-soft mt-1 max-w-xs">No hay clientes activos que coincidan con “{{ $q }}”.</p>
+    <div class="empty">
+        <strong>Sin resultados</strong>
+        @if ($q !== '')
+            No hay clientes que coincidan con “{{ $q }}”@if ($f !== 'todos') en este segmento @endif.
+        @else
+            No hay clientes en este segmento.
+        @endif
     </div>
 @else
-    <p class="section-label">{{ count($clientes) }} cliente(s)</p>
-    <ul class="group-list animate-card-in">
-        @foreach ($clientes as $c)
-            <li>
-                <form method="POST" action="{{ route('clientes.seleccionar') }}">
-                    @csrf
-                    <input type="hidden" name="codigo" value="{{ $c->codigo }}">
-                    <button class="pressable active:bg-mist flex w-full items-center gap-3 px-4 py-3.5 text-left {{ $actual === $c->codigo ? 'bg-cyan-soft' : '' }}">
-                        <div class="min-w-0 flex-1">
-                            <p class="leading-snug font-bold">{{ $c->nombre }}</p>
-                            <p class="text-foot text-label-2 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span class="num text-[15px] font-bold">{{ $c->codigo }}</span>
-                                @if ($c->ruc)<span aria-hidden="true">·</span><span>RUC {{ $c->ruc }}</span>@endif
-                            </p>
-                            @if ($c->direccion)
-                                <p class="text-foot text-label-2 mt-1 line-clamp-1">{{ $c->direccion }}</p>
+    <div class="tbl-box">
+        <table class="tbl tbl-clientes">
+            <thead>
+                <tr>
+                    <th scope="col"><span class="sr-only">Estado</span></th>
+                    <x-th-orden campo="cliente" :orden="$orden ?? null">Cliente</x-th-orden>
+                    <x-th-orden campo="nivel" :orden="$orden ?? null">Nivel de precio</x-th-orden>
+                    <x-th-orden campo="limite" :orden="$orden ?? null" class="th-num">Límite</x-th-orden>
+                    <x-th-orden campo="saldo" :orden="$orden ?? null" class="th-num">Saldo</x-th-orden>
+                    <x-th-orden campo="disponible" :orden="$orden ?? null" class="th-num">Disponible</x-th-orden>
+                    <x-th-orden campo="telefonos" :orden="$orden ?? null">Teléfonos</x-th-orden>
+                    <th scope="col"><span class="sr-only">Elegir</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($clientes as $c)
+                    <tr @class(['row-bad' => $c->moroso, 'is-actual' => $actual === $c->codigo])>
+                        <td>
+                            <span class="avatar" aria-hidden="true">{{ $iniciales($c->nombre) }}<i class="avatar-dot {{ $c->moroso ? 'is-bad' : 'is-ok' }}"></i></span>
+                        </td>
+                        <td class="cli-cell">
+                            {{-- Único control de la fila: un botón real (teclado nativo); el click en cualquier parte de la fila lo activa (clientes.js). --}}
+                            <button type="submit" form="form-elegir-cliente" name="codigo" value="{{ $c->codigo }}" class="cli-pick">
+                                <span class="cli-name"><span class="num cli-code">{{ $c->codigo }}</span> · {{ $c->nombre }}</span>
+                                @if ($c->moroso)<span class="tag tag-bad">Moroso</span>@endif
+                                @if ($actual === $c->codigo)<span class="tag tag-info">Actual</span>@endif
+                            </button>
+                            @if ($c->ruc)<span class="td-sub">RUC {{ $c->ruc }}</span>@endif
+                            @if ($c->direccion)<span class="td-sub cli-dir" title="{{ $c->direccion }}">{{ $c->direccion }}</span>@endif
+                        </td>
+                        <td>@if ($c->nivelPrecio)<span class="tag tag-neutral">{{ $c->nivelPrecio }}</span>@else<span class="td-sub">—</span>@endif</td>
+                        <td class="td-num">{{ dinero($c->credito, $c->moneda) }}</td>
+                        <td class="td-num {{ $c->saldo > 0 ? 'cli-bad' : '' }}">{{ dinero($c->saldo, $c->moneda) }}</td>
+                        <td class="td-num {{ $c->disponible > 0 ? 'cli-ok' : 'cli-sin' }}">
+                            {{ dinero($c->disponible, $c->moneda) }}
+                            @unless ($c->disponible > 0)<span class="td-sub">Sin crédito disponible</span>@endunless
+                        </td>
+                        <td>
+                            @if ($c->telefono1 || $c->telefono2)
+                                <span class="cli-tel">{{ $c->telefono1 ?: '—' }}</span>
+                                <span class="td-sub">{{ $c->telefono2 ?: '—' }}</span>
+                            @else
+                                <span class="td-sub">—</span>
                             @endif
-                            <p class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                @if ($c->moroso)
-                                    <span class="badge bg-danger-soft text-danger uppercase">Moroso</span>
-                                @endif
-                                @if ($c->disponible > 0)
-                                    <span class="badge bg-cyan-soft text-cyan-ink">Disponible <span class="num text-[13px]">{{ dinero($c->disponible, $c->moneda) }}</span></span>
-                                @else
-                                    <span class="badge bg-warn-soft text-warn">Sin crédito disponible</span>
-                                @endif
-                                @if ($c->nivelPrecio)
-                                    <span class="badge bg-mist text-ink-soft">{{ $c->nivelPrecio }}</span>
-                                @endif
-                            </p>
-                        </div>
-                        @if ($actual === $c->codigo)
-                            <span class="text-cyan-ink text-[11px] font-extrabold tracking-[0.1em] uppercase">Actual</span>
-                        @endif
-                        <svg viewBox="0 0 24 24" class="text-label-3 size-4 shrink-0" fill="currentColor" aria-hidden="true"><path d="M8.3 4.3a1 1 0 0 1 1.4 0l7 7a1 1 0 0 1 0 1.4l-7 7a1 1 0 0 1-1.4-1.4l6.29-6.3-6.3-6.3a1 1 0 0 1 0-1.4Z"/></svg>
-                    </button>
-                </form>
-            </li>
-        @endforeach
-    </ul>
+                        </td>
+                        <td class="cli-go" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+
+    <div class="tfoot">
+        <span>Mostrando {{ number_format($desde) }}–{{ number_format($hasta) }} de {{ number_format($total) }} clientes · Elige un cliente para empezar su pedido</span>
+        @if ($paginas > 1)
+            <nav class="pager" aria-label="Paginación">
+                <button type="button" class="pager-btn" data-page="{{ $pagina - 1 }}" @disabled($pagina <= 1) aria-label="Página anterior">‹</button>
+                @if ($ventana[0] > 1)
+                    <button type="button" class="pager-btn" data-page="1">1</button>
+                    @if ($ventana[0] > 2)<span class="pager-btn" aria-hidden="true">…</span>@endif
+                @endif
+                @foreach ($ventana as $n)
+                    <button type="button" @class(['pager-btn', 'on' => $n === $pagina]) data-page="{{ $n }}" @if ($n === $pagina) aria-current="page" @endif>{{ $n }}</button>
+                @endforeach
+                @if (end($ventana) < $paginas)
+                    @if (end($ventana) < $paginas - 1)<span class="pager-btn" aria-hidden="true">…</span>@endif
+                    <button type="button" class="pager-btn" data-page="{{ $paginas }}">{{ $paginas }}</button>
+                @endif
+                <button type="button" class="pager-btn" data-page="{{ $pagina + 1 }}" @disabled($pagina >= $paginas) aria-label="Página siguiente">›</button>
+            </nav>
+        @endif
+    </div>
 @endif

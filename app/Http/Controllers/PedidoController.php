@@ -11,6 +11,7 @@ use App\Pedidos\Carrito;
 use App\Pedidos\Linea;
 use App\Softland\ConsecutivoPedido;
 use App\Softland\EnviarPedidoSoftland;
+use App\Support\Orden;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,6 +19,16 @@ use Throwable;
 
 class PedidoController extends Controller
 {
+    /** Columnas del historial que se ordenan al tocar el encabezado => expresión SQL (lista cerrada). */
+    private const ORDENES_HISTORIAL = [
+        'pedido' => 'softland_pedido',
+        'cliente' => 'cliente',
+        'fecha' => 'COALESCE(fecha_pedido, created_at)',
+        'articulos' => 'lineas',
+        'softland' => 'softland_estado',
+        'total' => 'total',
+    ];
+
     public function index(Request $request)
     {
         $filtros = $request->validate([
@@ -37,11 +48,18 @@ class PedidoController extends Controller
                 ->where('softland_pedido', 'like', "%{$t}%")
                 ->orWhere('cliente', 'like', "%{$t}%")
                 ->orWhere('cliente_codigo', $t)))
-            ->latest()
+            ->when(
+                $orden = Orden::desde($request, array_keys(self::ORDENES_HISTORIAL)),
+                // Columna elegida al tocar el encabezado; vacíos al final; empate: más reciente.
+                fn ($q) => $q->orderByRaw(self::ORDENES_HISTORIAL[$orden->campo].' IS NULL')
+                    ->orderByRaw(self::ORDENES_HISTORIAL[$orden->campo].' '.$orden->dir())
+                    ->latest('id'),
+                fn ($q) => $q->latest(),
+            )
             ->paginate(20)
             ->withQueryString();
 
-        return view('pedidos.index', compact('pedidos', 'filtros'));
+        return view('pedidos.index', compact('pedidos', 'filtros', 'orden'));
     }
 
     public function show(Pedido $pedido, EnviarPedidoSoftland $envio, Clientes $clientes, ConsecutivoPedido $consecutivo)

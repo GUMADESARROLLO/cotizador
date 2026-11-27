@@ -6,6 +6,10 @@
  * palabra sobre la existencia disponible.
  */
 
+import './pages/articulos.js';
+import './pages/clientes.js';
+import './pages/pedido.js';
+
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
@@ -131,6 +135,240 @@ function initSearch() {
     }
 }
 
+/* ---------- Shell: menú lateral (cajón en < lg, colapsable en lg+) ---------- */
+function initShell() {
+    const shell = $('#appShell');
+    const toggle = $('[data-side-toggle]');
+    if (!shell || !toggle) return;
+    const desktop = matchMedia('(min-width: 1024px)');
+    const cerrar = () => {
+        shell.classList.remove('side-open');
+        sync();
+    };
+    function sync() {
+        const abierto = desktop.matches ? !shell.classList.contains('side-collapsed') : shell.classList.contains('side-open');
+        toggle.setAttribute('aria-expanded', String(abierto));
+    }
+    toggle.addEventListener('click', () => {
+        if (desktop.matches) {
+            const colapsado = shell.classList.toggle('side-collapsed');
+            try {
+                localStorage.setItem('cotSideCollapsed', colapsado ? '1' : '0');
+            } catch {}
+        } else {
+            shell.classList.toggle('side-open');
+        }
+        sync();
+    });
+    $('[data-side-close]')?.addEventListener('click', cerrar);
+    addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && shell.classList.contains('side-open')) cerrar();
+    });
+    desktop.addEventListener('change', cerrar);
+    sync();
+}
+
+/* ---------- Listado genérico (buscador + filtros + paginación con fetch) ----------
+ * <div data-listado data-endpoint="/ruta">
+ *   input[name=q] · [data-clear] · [data-filtro="valor"] · select[name=per]
+ *   <div data-results> … [data-page="n"] … [data-contadores data-todos="3" …] </div>
+ * </div>
+ * Params: q, f, per, page. Emite 'listado:render' ({detail: {root}}) tras cada render.
+ * Con data-listado-lazy el primer render también se pide por fetch.
+ */
+function initListado() {
+    $$('[data-listado]').forEach((root) => {
+        const results = $('[data-results]', root);
+        const input = $('input[name="q"]', root);
+        const clear = $('[data-clear]', root);
+        const per = $('select[name="per"]', root);
+        const filtros = $$('[data-filtro]', root);
+        if (!results || !root.dataset.endpoint) return;
+
+        const url0 = new URL(location.href).searchParams;
+        const defF = filtros[0]?.dataset.filtro ?? '';
+        const defPer = per ? (per.querySelector('option[selected]') ?? per.options[0])?.value : '';
+        const state = {
+            q: input?.value.trim() || url0.get('q') || '',
+            f: url0.get('f') || filtros.find((b) => b.classList.contains('on'))?.dataset.filtro || defF,
+            per: url0.get('per') || per?.value || '',
+            page: Math.max(1, Number(url0.get('page')) || 1),
+            o: url0.get('o') || '', // columna ordenada (encabezados [data-orden])
+            d: url0.get('d') === 'desc' ? 'desc' : 'asc',
+        };
+        let controller;
+        let timer;
+        const set = (u, k, v) => (v !== '' && v != null ? u.searchParams.set(k, v) : u.searchParams.delete(k));
+
+        const pintarControles = () => {
+            if (input && input.value.trim() !== state.q) input.value = state.q;
+            if (clear) clear.hidden = state.q === '';
+            if (per && state.per) per.value = state.per;
+            filtros.forEach((b) => {
+                const on = b.dataset.filtro === state.f;
+                b.classList.toggle('on', on);
+                b.setAttribute('aria-pressed', String(on));
+            });
+        };
+
+        const contadores = () => {
+            const c = $('[data-contadores]', results);
+            if (!c) return;
+            Object.entries(c.dataset).forEach(([k, v]) => {
+                $$(`[data-seg-n="${k}"]`, root).forEach((el) => (el.textContent = Number(v).toLocaleString('en-US')));
+            });
+        };
+
+        async function run({ pushUrl = true } = {}) {
+            controller?.abort();
+            const mio = (controller = new AbortController());
+            const url = new URL(root.dataset.endpoint, location.origin);
+            set(url, 'q', state.q);
+            set(url, 'f', state.f);
+            set(url, 'per', state.per);
+            set(url, 'page', state.page);
+            set(url, 'o', state.o);
+            set(url, 'd', state.o ? state.d : '');
+
+            if (pushUrl) {
+                const page = new URL(location.href);
+                set(page, 'q', state.q);
+                set(page, 'f', state.f !== defF ? state.f : '');
+                set(page, 'per', state.per && state.per !== defPer ? state.per : '');
+                set(page, 'page', state.page > 1 ? state.page : '');
+                set(page, 'o', state.o);
+                set(page, 'd', state.o && state.d === 'desc' ? 'desc' : '');
+                history.replaceState(null, '', page);
+            }
+
+            results.setAttribute('aria-busy', 'true');
+            try {
+                const res = await fetch(url, {
+                    signal: mio.signal,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                // Sin cliente elegido (p. ej. sesión vencida): volver al paso 1.
+                if (res.status === 409 && res.headers.get('X-Redirect')) {
+                    location.href = res.headers.get('X-Redirect');
+                    return;
+                }
+                results.innerHTML = await res.text();
+                contadores();
+                document.dispatchEvent(new CustomEvent('listado:render', { detail: { root } }));
+            } catch (e) {
+                if (e.name !== 'AbortError') toast('No se pudo cargar. Revisa tu conexión.');
+            } finally {
+                if (controller === mio) results.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        input?.addEventListener('input', () => {
+            state.q = input.value.trim();
+            state.page = 1;
+            if (clear) clear.hidden = input.value === '';
+            clearTimeout(timer);
+            timer = setTimeout(run, 250); // evita una consulta por cada tecla
+        });
+        input?.closest('form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            clearTimeout(timer);
+            run();
+        });
+        clear?.addEventListener('pointerdown', (e) => {
+            e.preventDefault(); // conserva el foco en el campo
+            input.value = '';
+            state.q = '';
+            state.page = 1;
+            clear.hidden = true;
+            run();
+        });
+        filtros.forEach((b) =>
+            b.addEventListener('click', () => {
+                if (state.f === b.dataset.filtro) return;
+                state.f = b.dataset.filtro;
+                state.page = 1;
+                pintarControles();
+                run();
+            }),
+        );
+        per?.addEventListener('change', () => {
+            state.per = per.value;
+            state.page = 1;
+            run();
+        });
+        root.addEventListener('click', (e) => {
+            // Encabezado ordenable: el servidor ordena TODO el listado, no solo la página.
+            const th = e.target.closest('[data-orden]');
+            if (th && root.contains(th)) {
+                e.preventDefault();
+                e.stopPropagation();
+                const campo = th.dataset.orden;
+                state.d = state.o === campo && state.d === 'asc' ? 'desc' : 'asc';
+                state.o = campo;
+                state.page = 1;
+                run();
+                return;
+            }
+            const p = e.target.closest('[data-page]');
+            if (!p || !root.contains(p) || p.disabled) return;
+            e.preventDefault();
+            state.page = Math.max(1, Number(p.dataset.page) || 1);
+            run();
+            root.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        });
+
+        pintarControles();
+        if ('listadoLazy' in root.dataset) run({ pushUrl: false });
+    });
+}
+
+/* ---------- Orden por columnas fuera de los listados ----------
+ * <x-th-orden> pone [data-orden] en el encabezado. Dentro de [data-listado] lo
+ * maneja initListado (servidor). Aquí, el resto:
+ *  - tabla con data-orden-local: reordena las filas del tbody en el navegador
+ *    (número si la celda empieza con uno —C$1,234.50, 12 CJA—; si no, texto);
+ *  - si no: recarga la página con ?o=campo&d=asc|desc (sin page).
+ */
+const valorCelda = (td) => {
+    const t = (td?.dataset.v ?? td?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const m = t.replace(/,/g, '').match(/^[^\d-]{0,4}(-?\d+(?:\.\d+)?)/);
+    return m ? Number(m[1]) : t;
+};
+function ordenarTablas() {
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-orden]');
+        if (!btn || btn.closest('[data-listado]')) return;
+        const th = btn.closest('th');
+        const table = btn.closest('table');
+        const desc = th.getAttribute('aria-sort') === 'ascending';
+
+        if (!table.hasAttribute('data-orden-local')) {
+            const url = new URL(location.href);
+            url.searchParams.set('o', btn.dataset.orden);
+            url.searchParams.set('d', desc ? 'desc' : 'asc');
+            url.searchParams.delete('page');
+            location.assign(url);
+            return;
+        }
+
+        const col = [...th.parentElement.children].indexOf(th);
+        $$('thead th[aria-sort]', table).forEach((x) => x.setAttribute('aria-sort', 'none'));
+        th.setAttribute('aria-sort', desc ? 'descending' : 'ascending');
+        const tbody = table.tBodies[0];
+        const filas = [...tbody.rows];
+        const vacios = (v) => v === '' || v === '—';
+        filas.sort((a, b) => {
+            const [x, y] = [valorCelda(a.cells[col]), valorCelda(b.cells[col])];
+            if (vacios(x) !== vacios(y)) return vacios(x) ? 1 : -1; // vacíos siempre al final
+            const r = typeof x === 'number' && typeof y === 'number'
+                ? x - y
+                : String(x).localeCompare(String(y), 'es', { numeric: true, sensitivity: 'base' });
+            return desc ? -r : r;
+        });
+        tbody.append(...filas);
+    });
+}
+
 /* ---------- Resumen del pedido (badge, píldora, totales) ---------- */
 function renderResumen(r) {
     $$('[data-cart-badge]').forEach((b) => {
@@ -142,6 +380,7 @@ function renderResumen(r) {
     $$('[data-cart-total]').forEach((el) => (el.textContent = money(r.total)));
     const pill = $('[data-cart-pill]');
     if (pill) pill.hidden = !r.lineas;
+    $$('[data-cart-top]').forEach((el) => (el.hidden = !r.lineas));
     // Aviso (no bloqueante) si el total supera el crédito disponible del cliente.
     $$('[data-credit-warning]').forEach((el) => (el.hidden = r.total <= Number(el.dataset.disponible)));
 }
@@ -761,8 +1000,11 @@ function initConfirmForm() {
     });
 }
 
+initShell();
 initScrollEdge();
 initSearch();
+initListado();
+ordenarTablas();
 /* ---------- Envío a Softland con confirmación (SweetAlert2) ---------- */
 // Se carga bajo demanda: solo en la pantalla del pedido, no en cada página.
 async function swal() {

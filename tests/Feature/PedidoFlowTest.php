@@ -35,7 +35,7 @@ class PedidoFlowTest extends TestCase
     public function test_sin_cliente_el_inicio_lleva_a_elegirlo(): void
     {
         $this->get('/')->assertRedirect(route('clientes.index'));
-        $this->get('/clientes')->assertOk()->assertSee('Busca el cliente');
+        $this->get('/clientes')->assertOk()->assertSee('Buscar cliente, código o RUC');
         $this->get('/articulos')->assertRedirect(route('clientes.index'));
         $this->get('/pedido')->assertRedirect(route('clientes.index'));
         $this->postJson('/pedido/items', ['codigo' => 'X', 'cantidad' => 1])->assertStatus(409);
@@ -50,7 +50,7 @@ class PedidoFlowTest extends TestCase
             ->assertSee('FARMACIA LA PROVIDENCIA')
             ->assertSee('FARMACIA LA UNION')
             ->assertSee('Moroso')
-            ->assertSeeText('Disponible C$2,500.00');
+            ->assertSeeText('C$2,500.00');
 
         $this->get('/clientes/buscar?q=hospital')->assertSee('Sin crédito disponible');
         $this->get('/clientes/buscar?q=00005')->assertSee('FARMACIA LOPEZ')->assertDontSee('PROVIDENCIA');
@@ -62,14 +62,12 @@ class PedidoFlowTest extends TestCase
 
         $this->get('/')->assertRedirect(route('articulos.index'));
         $this->get('/articulos')->assertOk()
-            ->assertSee('Cliente del pedido')
-            ->assertSee('FARMACIA LA UNION')
-            ->assertSee('Moroso');
+            ->assertSee('FARMACIA LA UNION');
     }
 
     public function test_solo_clientes_del_vendedor_configurado(): void
     {
-        $this->get('/clientes')->assertSee('Clientes de Cesia Moreira (F12)');
+        $this->get('/clientes')->assertSee('Cartera de Cesia Moreira (F12)');
         $this->get('/clientes/buscar?q=farmacia')->assertSee('FARMACIA LOPEZ')->assertDontSee('OTRO VENDEDOR');
 
         $this->from('/clientes')->post('/clientes/seleccionar', ['codigo' => '00020'])
@@ -89,7 +87,7 @@ class PedidoFlowTest extends TestCase
     public function test_pantallas_con_cliente_cargan(): void
     {
         $this->elegirCliente();
-        $this->get('/articulos')->assertOk()->assertSee('Busca un artículo');
+        $this->get('/articulos')->assertOk()->assertSee('Buscar artículo o código');
         $this->get('/pedido')->assertOk()->assertSee('Tu pedido está vacío');
         $this->get('/pedidos')->assertOk()->assertSee('Aún no hay pedidos');
     }
@@ -101,14 +99,16 @@ class PedidoFlowTest extends TestCase
             ->assertOk()
             ->assertSee('TOR-0001')
             ->assertSee('$1.85')
-            ->assertSeeText('1,250 PZA disp.')
+            ->assertSeeText('1,250 PZA')
             ->assertDontSee('TUE-0010');
     }
 
     public function test_agotados_se_marcan(): void
     {
         $this->elegirCliente();
-        $this->get('/articulos/buscar?q=RON-0020')->assertSee('Agotado');
+        // Por defecto solo se listan los que tienen existencia: los agotados, con "Todos".
+        $this->get('/articulos/buscar?q=RON-0020')->assertDontSee('Agotado');
+        $this->get('/articulos/buscar?q=RON-0020&f=todos')->assertSee('Agotado');
     }
 
     public function test_se_puede_pedir_mas_de_la_existencia_con_aviso(): void

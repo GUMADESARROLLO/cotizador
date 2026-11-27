@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Clientes\SqlServerClientes;
+use App\Support\Orden;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -17,7 +18,7 @@ class SqlServerClientesTest extends TestCase
         parent::setUp();
 
         Schema::create('cliente', function ($t) {
-            foreach (['CLIENTE', 'NOMBRE', 'ALIAS', 'DIRECCION', 'VENDEDOR', 'ACTIVO', 'MOROSO'] as $c) {
+            foreach (['CLIENTE', 'NOMBRE', 'ALIAS', 'DIRECCION', 'VENDEDOR', 'ACTIVO', 'MOROSO', 'TELEFONO1', 'TELEFONO2'] as $c) {
                 $t->string($c)->nullable();
             }
             $t->string('CONDICION_PAGO')->default('180');
@@ -106,5 +107,67 @@ class SqlServerClientesTest extends TestCase
         $this->assertNotContains('00500', $codigos($c->buscar('farmacia'))); // otro vendedor
         $this->assertNull($c->encontrar('00500'));
         $this->assertSame('00500', $this->clientes(null)->encontrar('00500')->codigo); // sin filtro de vendedor
+    }
+
+    public function test_listar_pagina_toda_la_cartera_del_vendedor_ordenada_por_nombre(): void
+    {
+        $c = $this->clientes();
+        $codigos = fn ($r) => array_map(fn ($x) => $x->codigo, $r['items']);
+
+        // Activos de F12: 7 (sin el inactivo ni el de otro vendedor).
+        $p1 = $c->listar('', 'todos', 1, 3);
+        $p3 = $c->listar('', 'todos', 3, 3);
+
+        $this->assertSame(7, $p1['total']);
+        $this->assertCount(3, $p1['items']);
+        $this->assertCount(1, $p3['items']);
+        $this->assertSame(['03164'], $codigos($c->listar('cruz', 'todos', 1, 10)));
+        $this->assertSame([], $c->listar('', 'todos', 9, 3)['items']);
+        $this->assertNotContains('00500', $codigos($c->listar('', 'todos', 1, 50)));
+        $this->assertNotContains('00099', $codigos($c->listar('', 'todos', 1, 50)));
+    }
+
+    public function test_listar_filtra_morosos_y_con_saldo_y_la_busqueda_pone_el_codigo_exacto_primero(): void
+    {
+        $c = $this->clientes();
+        $codigos = fn ($r) => array_map(fn ($x) => $x->codigo, $r['items']);
+
+        $this->assertSame(['00004'], $codigos($c->listar('', 'morosos', 1, 10)));
+        $this->assertEqualsCanonicalizing(['00004', '03164'], $codigos($c->listar('', 'saldo', 1, 10)));
+        $this->assertSame(1, $c->listar('farmacia', 'morosos', 1, 10)['total']);
+
+        DB::table('cliente')->where('CLIENTE', '00030')->update(['NOMBRE' => 'AAA 00011 PRIMERO']);
+        $this->assertSame('00011', $c->listar('00011', 'todos', 1, 10)['items'][0]->codigo); // exacto antes que el nombre
+    }
+
+    public function test_listar_ordena_por_columna_en_sql(): void
+    {
+        $c = $this->clientes();
+        $codigos = fn ($r) => array_map(fn ($x) => $x->codigo, $r['items']);
+
+        $saldo = $codigos($c->listar('', 'todos', 1, 10, new Orden('saldo', desc: true)));
+        $this->assertSame(['03164', '00004'], array_slice($saldo, 0, 2));
+        // Ordenado sobre toda la cartera: la página 1 de 2 en 2 ya trae los dos de mayor saldo.
+        $this->assertSame(['03164', '00004'], $codigos($c->listar('', 'todos', 1, 2, new Orden('saldo', desc: true))));
+        // Disponible = límite - saldo: el moroso (2,500 - 3,000) es el menor.
+        $this->assertSame('00004', $codigos($c->listar('', 'todos', 1, 10, new Orden('disponible')))[0]);
+    }
+
+    public function test_contar_da_los_tres_contadores_con_la_busqueda(): void
+    {
+        $c = $this->clientes();
+
+        $this->assertSame(['todos' => 7, 'morosos' => 1, 'saldo' => 2], $c->contar(''));
+        $this->assertSame(['todos' => 1, 'morosos' => 1, 'saldo' => 1], $c->contar('union'));
+        $this->assertSame(['todos' => 0, 'morosos' => 0, 'saldo' => 0], $c->contar('zzzz'));
+    }
+
+    public function test_lee_telefonos(): void
+    {
+        DB::table('cliente')->where('CLIENTE', '00004')->update(['TELEFONO1' => '2222-1111', 'TELEFONO2' => '8888-0000']);
+
+        $c = $this->clientes()->encontrar('00004');
+        $this->assertSame(['2222-1111', '8888-0000'], [$c->telefono1, $c->telefono2]);
+        $this->assertSame('', $this->clientes()->encontrar('00011')->telefono1);
     }
 }

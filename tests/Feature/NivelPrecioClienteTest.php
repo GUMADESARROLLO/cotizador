@@ -36,7 +36,7 @@ class NivelPrecioClienteTest extends TestCase
     public function test_cliente_en_dolares_ve_us_y_el_pedido_guarda_moneda_y_nivel(): void
     {
         $this->post('/clientes/seleccionar', ['codigo' => '00030']);
-        $this->get('/articulos')->assertSee('Precios INST.PRIV.U$')->assertSee('Condición');
+        $this->get('/articulos')->assertSee('Precio INST.PRIV.U$ y existencia');
         $this->get('/articulos/buscar?q=uno')->assertSee('US$100.00');
 
         $this->postJson('/pedido/items', ['codigo' => 'A1', 'cantidad' => 2]);

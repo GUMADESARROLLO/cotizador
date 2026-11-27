@@ -72,8 +72,8 @@ class ReordenTest extends TestCase
         $this->consultas = 0;
 
         $this->buscar()
-            ->assertSeeInOrder(['10115012', 'A', '— meses'])
-            ->assertSeeInOrder(['10118022', 'CCA', '14.7', 'meses'])
+            ->assertSeeTextInOrder(['10115012', 'Categoría A', '— meses'])
+            ->assertSeeTextInOrder(['10118022', 'Categoría CCA', '14.7', 'meses'])
             ->assertSeeInOrder(['99999999', 'Cat. —'])
             ->assertSee('foto del 26/10/2026');
 
@@ -99,8 +99,8 @@ class ReordenTest extends TestCase
     {
         $this->reorden(new RuntimeException('timeout'));
 
-        $this->buscar()->assertSee('Artículo 10118022')->assertDontSee('Cat. —');
-        $this->buscar()->assertSee('Artículo 10118022');
+        $this->buscar()->assertSee('ARTÍCULO 10118022')->assertDontSee('Cat. —');
+        $this->buscar()->assertSee('ARTÍCULO 10118022');
 
         $this->assertSame(1, $this->consultas);
     }

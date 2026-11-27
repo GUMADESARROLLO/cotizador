@@ -70,6 +70,35 @@ class Reorden
         return $resultado;
     }
 
+    /**
+     * Códigos con categoría que empieza por $prefijo (p. ej. "A" = A, ACA…), desde el
+     * mapa en caché y sin consultar SQL Server. [] si no hay mapa.
+     *
+     * @return list<string>
+     */
+    public function codigosConCategoria(string $prefijo = 'A'): array
+    {
+        $codigos = [];
+        foreach ($this->datos()['mapa'] ?? [] as $codigo => $d) {
+            if (str_starts_with(strtoupper((string) ($d['categoria'] ?? '')), strtoupper($prefijo))) {
+                $codigos[] = (string) $codigo;
+            }
+        }
+
+        return $codigos;
+    }
+
+    /**
+     * Valor de "categoria" o "meses" por código, para ordenar el catálogo por esa
+     * columna. Sale del mismo mapa en caché (no consulta SQL Server).
+     *
+     * @return array<string, string|float|null>
+     */
+    public function valores(string $campo): array
+    {
+        return array_map(fn (array $d) => $d[$campo] ?? null, $this->datos()['mapa'] ?? []);
+    }
+
     /** ¿Hay un mapa cargado? (si no, la vista no muestra nada en lugar de "—"). */
     public function cargado(): bool
     {

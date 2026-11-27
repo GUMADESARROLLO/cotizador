@@ -1,0 +1,122 @@
+/* Pantalla Clientes: solo lo que no cubren los componentes de la shell. */
+
+@layer components {
+    /* Recientes: fila compacta sobre la card */
+    .cli-recientes {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+    }
+    .cli-recientes-t {
+        color: var(--color-ink-soft);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .cli-reciente {
+        max-width: 100%;
+        height: 36px;
+    }
+    .cli-reciente .num {
+        color: var(--color-royal);
+        font-weight: 700;
+    }
+    .cli-reciente-n {
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .cli-reciente-f {
+        color: var(--color-ink-soft);
+        font-size: 11.5px;
+    }
+
+    /* Tabla */
+    .tbl.tbl-clientes td {
+        vertical-align: middle;
+    }
+    .tbl.tbl-clientes th,
+    .tbl.tbl-clientes td {
+        padding-inline: 12px;
+    }
+    .tbl-clientes tbody tr {
+        cursor: pointer;
+    }
+    .tbl-clientes tbody tr:focus-within {
+        background: var(--color-hover);
+        box-shadow: inset 3px 0 0 var(--color-royal);
+    }
+    .tbl-clientes tbody tr.is-actual {
+        background: #eef3fc;
+    }
+    .cli-cell {
+        /* Angosta para que la tabla completa (con teléfonos) quepa a 1440px. */
+        min-width: 240px;
+        max-width: 300px;
+    }
+    .tbl-clientes th:first-child,
+    .tbl-clientes td:first-child {
+        width: 1%;
+        padding-right: 4px;
+    }
+    .cli-pick {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 8px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--color-ink);
+        font: inherit;
+        font-weight: 650;
+        text-align: left;
+        cursor: pointer;
+    }
+    .cli-pick:focus-visible {
+        outline: none; /* el foco se ve en la fila (focus-within) */
+    }
+    .cli-code {
+        color: var(--color-royal);
+        font-size: 15px;
+        font-weight: 700;
+    }
+    .cli-dir {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .cli-bad {
+        color: var(--color-danger);
+    }
+    .cli-ok {
+        color: var(--color-ok-ink);
+    }
+    .cli-sin {
+        color: var(--color-ink-soft);
+    }
+    .cli-tel {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .tbl-clientes .td-sub {
+        white-space: nowrap;
+    }
+    .tbl-clientes .cli-cell .td-sub {
+        white-space: normal;
+    }
+    .tbl-clientes .cli-cell .cli-dir {
+        white-space: nowrap;
+    }
+    .cli-go {
+        width: 1%;
+        color: var(--color-faint);
+    }
+    .tbl-clientes tbody tr:hover .cli-go {
+        color: var(--color-royal);
+    }
+}

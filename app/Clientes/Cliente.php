@@ -19,6 +19,8 @@ final readonly class Cliente
         public string $nivelPrecio = '',
         public string $monedaNivel = 'L', // moneda de los precios: L = córdobas, D = dólares
         public string $moneda = 'L',      // moneda del crédito/saldo del cliente
+        public string $telefono1 = '',
+        public string $telefono2 = '',
     ) {}
 
     /**
@@ -51,6 +53,8 @@ final readonly class Cliente
             monedaNivel: strtoupper(trim((string) ($row->moneda_nivel ?? 'L'))) === 'D' ? 'D' : 'L',
             // En la ficha la moneda viene como COR / DOL.
             moneda: in_array(strtoupper(trim((string) ($row->moneda ?? ''))), ['DOL', 'D', 'USD'], true) ? 'D' : 'L',
+            telefono1: trim((string) ($row->telefono1 ?? '')),
+            telefono2: trim((string) ($row->telefono2 ?? '')),
         );
     }
 

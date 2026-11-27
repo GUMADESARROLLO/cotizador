@@ -1,96 +1,119 @@
-<x-layouts.app title="Pedido" slogan="Revisa cantidades y confirma" tab="pedido" :resumen="$resumen">
-    @if (count($items))
-        <x-slot:trailing>
+<x-layouts.app title="Pedido" sub="Revisa cantidades, lotes y precios antes de confirmar" section="pedido" :resumen="$resumen">
+    <x-slot:actions>
+        @if (count($items))
+            <a href="{{ route('softland.vista-previa') }}" class="btn btn-line">Ver datos para Softland</a>
+        @endif
+        <a href="{{ route('articulos.index') }}" class="btn btn-line">Agregar artículos</a>
+        @if (count($items))
             <form method="POST" action="{{ route('carrito.vaciar') }}"
                   onsubmit="return confirm('¿Vaciar el pedido? Se quitarán todos los artículos.')">
                 @csrf @method('DELETE')
-                <button class="pressable text-danger h-11 px-1 text-sm font-extrabold tracking-[0.06em] uppercase">Vaciar</button>
+                <button class="btn btn-line" style="color: var(--color-danger)">Vaciar</button>
             </form>
-        </x-slot:trailing>
-    @endif
+        @endif
+    </x-slot:actions>
 
     @if ($editando)
-        <div class="mb-4 flex items-center justify-between gap-3 rounded-[20px] bg-white px-4 py-3 shadow-[0_0_0_2px_var(--color-cyan)]">
-            <p class="min-w-0">
-                <span class="text-cyan-ink block text-[11px] font-extrabold tracking-[0.14em] uppercase">Modificando pedido</span>
-                <span class="text-ink block leading-tight font-bold">Creado el <span class="num text-[18px] font-extrabold">{{ $editando->created_at->format('d/m/Y H:i') }}</span></span>
+        <div class="ped-edit">
+            <p>
+                <span class="eyebrow">Modificando pedido</span>
+                <strong>Creado el <span class="num" style="font-size: 18px">{{ $editando->created_at->format('d/m/Y H:i') }}</span></strong>
             </p>
             <form method="POST" action="{{ route('pedidos.cancelar-edicion') }}">
                 @csrf
-                <button class="pressable text-danger shrink-0 px-1 py-2 text-[12px] font-extrabold tracking-[0.06em] uppercase">Cancelar edición</button>
+                <button class="btn btn-line" style="color: var(--color-danger)">Cancelar edición</button>
             </form>
         </div>
     @endif
 
-    <x-cliente-actual :cliente="$cliente" :total="$resumen['total']" />
-
-    <div data-cart-empty @if (count($items)) hidden @endif class="flex flex-col items-center px-8 pt-10 pb-6 text-center">
-        <div class="empty-icon">
-            <svg viewBox="0 0 24 24" class="size-8" fill="currentColor" aria-hidden="true"><path d="M7 7V6a5 5 0 0 1 10 0v1h2.1a1 1 0 0 1 1 .92l1 12A2 2 0 0 1 19.1 22H4.9a2 2 0 0 1-2-2.08l1-12A1 1 0 0 1 4.9 7H7Zm2 0h6V6a3 3 0 0 0-6 0v1Z"/></svg>
+    <div data-cart-empty @if (count($items)) hidden @endif class="card ped-block">
+        <div class="empty">
+            <strong>Tu pedido está vacío</strong>
+            Busca artículos y agrégalos; aquí verás cantidades y total.
+            <div style="margin-top: 16px"><a href="{{ route('articulos.index') }}" class="btn btn-solid">Buscar artículos</a></div>
         </div>
-        <p class="text-title font-extrabold text-white">Tu pedido está vacío</p>
-        <p class="text-sub text-on-royal-soft mt-1 max-w-xs">Busca artículos y agrégalos; aquí verás cantidades y total.</p>
-        <a href="{{ route('articulos.index') }}" class="btn-primary mt-6 w-auto">Buscar artículos</a>
     </div>
 
     @if (count($items))
-        <div data-cart-content class="space-y-6">
-            {{-- Datos del pedido en una fila: fecha (toca → calendario) y número tentativo en Softland. --}}
-            <section>
-                <p class="section-label">Datos del pedido</p>
-                <div class="group-list flex items-stretch">
-                    {{-- Fecha: hoy por defecto; se puede poner otra (p. ej. armarlo hoy con fecha del lunes). --}}
-                    <button type="button" data-fecha-trigger aria-haspopup="dialog" aria-label="Cambiar fecha del pedido"
-                            data-fecha="{{ $fecha->format('Y-m-d') }}" data-hoy="{{ today()->format('Y-m-d') }}" data-min="{{ $fechaMin->format('Y-m-d') }}" data-max="{{ $fechaMax->format('Y-m-d') }}"
-                            class="pressable active:bg-mist flex min-w-0 flex-1 items-center gap-3 py-3 pr-2 pl-4 text-left">
-                        <span class="bg-royal text-cyan grid size-9 shrink-0 place-items-center rounded-full" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" class="size-[18px]" fill="currentColor"><path d="M8 2a1 1 0 0 1 1 1v1h6V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm11 8H5v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-8ZM6 6a1 1 0 0 0-1 1v1h14V7a1 1 0 0 0-1-1H6Z"/></svg>
-                        </span>
-                        <span class="num text-ink min-w-0 text-[22px] leading-tight font-extrabold whitespace-nowrap" data-fecha-texto>{{ fecha_corta($fecha) }}</span>
-                        <svg viewBox="0 0 24 24" class="text-royal size-4 shrink-0" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
-                    </button>
-                    {{-- Número tentativo (se asigna al enviar) y de qué consecutivo de Softland sale. --}}
-                    {{-- Toca → elegir el consecutivo (DESP-A, DESP-B…); el número cambia según el elegido. --}}
-                    <button type="button" data-consecutivo-trigger aria-haspopup="dialog" aria-label="Pedido Softland: cambiar consecutivo"
-                            class="pressable active:bg-mist border-line flex shrink-0 flex-col items-end justify-center border-l py-3 pr-4 pl-3 text-right">
-                        <span class="num text-ink text-[22px] leading-tight font-extrabold whitespace-nowrap" data-numero-pedido>{{ $numeroPedido ? 'N.º '.$numeroPedido : '—' }}</span>
-                        <span class="text-label-2 flex items-center gap-1 text-[12px] whitespace-nowrap">Consecutivo <b class="text-ink" data-consecutivo-texto>{{ $codigoConsecutivo }}</b>
-                            <svg viewBox="0 0 24 24" class="text-royal size-3.5" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
-                        </span>
-                    </button>
-                </div>
-            </section>
+        <div data-cart-content class="ped-grid">
+            <div class="ped-main">
+                <section class="card" aria-label="Artículos del pedido">
+                    <div class="card-head">
+                        <h2>Artículos · <span data-cart-lineas>{{ $resumen['lineas'] }}</span></h2>
+                        <small>Toca una fila para editar cantidad, precio o lote</small>
+                    </div>
+                    <div class="tbl-box">
+                        <table class="tbl" data-orden-local>
+                            <thead>
+                                <tr>
+                                    <x-th-orden campo="articulo">Artículo</x-th-orden>
+                                    <x-th-orden campo="cantidad" class="th-num">Cantidad</x-th-orden>
+                                    <x-th-orden campo="precio" class="th-num">Precio</x-th-orden>
+                                    <x-th-orden campo="subtotal" class="th-num">Subtotal</x-th-orden>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody data-cart-lista>
+                                @foreach ($items as $i)
+                                    @include('carrito._linea', [
+                                        'i' => $i,
+                                        'lotesArt' => $lotes[$i['codigo']] ?? [],
+                                        'imagenes' => $imagenes ?? [],
+                                        'ajustado' => in_array($i['codigo'], session('ajustados', [])),
+                                    ])
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
 
-            <section>
-                <p class="section-label flex justify-between">
-                    <span>Artículos · <span data-cart-lineas>{{ $resumen['lineas'] }}</span></span>
-                    <span class="normal-case tracking-normal font-semibold">Toca uno para editarlo</span>
-                </p>
-                <ul class="group-list" data-cart-lista>
-                    @foreach ($items as $i)
-                        @include('carrito._linea', [
-                            'i' => $i,
-                            'lotesArt' => $lotes[$i['codigo']] ?? [],
-                            'ajustado' => in_array($i['codigo'], session('ajustados', [])),
-                        ])
-                    @endforeach
-                </ul>
-            </section>
+            <aside class="ped-side">
+                @include('pedidos._cliente', ['cliente' => $cliente, 'total' => $resumen['total'], 'cambiar' => true])
 
-            <form method="POST" action="{{ route('pedidos.store') }}" class="space-y-6" data-confirm-form>
-                @csrf
-                <section>
-                    <label for="notas" class="section-label block">Observaciones</label>
-                    <textarea id="notas" name="notas" rows="2" maxlength="2000"
-                              placeholder="Ej.: ORDEN DE COMPRA No. 121164"
-                              class="text-ink placeholder:text-label-3 block w-full resize-none rounded-[20px] bg-white px-4 py-3 font-medium shadow-[0_30px_60px_-30px_rgb(9_16_56/0.6)] outline-none focus:shadow-[0_0_0_3px_var(--color-cyan)]">{{ old('notas', $observaciones) }}</textarea>
-                    <p class="text-on-royal-soft px-1 pt-1.5 text-[12px]">Va a Softland como observaciones del pedido.</p>
+                {{-- Datos del pedido: fecha (abre el calendario) y número tentativo en Softland (abre el consecutivo). --}}
+                <section class="card" aria-label="Datos del pedido">
+                    <div class="ped-datos">
+                        {{-- Fecha: hoy por defecto; se puede poner otra (p. ej. armarlo hoy con fecha del lunes). --}}
+                        <button type="button" data-fecha-trigger aria-haspopup="dialog" aria-label="Cambiar fecha del pedido"
+                                data-fecha="{{ $fecha->format('Y-m-d') }}" data-hoy="{{ today()->format('Y-m-d') }}" data-min="{{ $fechaMin->format('Y-m-d') }}" data-max="{{ $fechaMax->format('Y-m-d') }}"
+                                class="ped-dato">
+                            <span class="ped-dato-label">Fecha del pedido</span>
+                            <span class="ped-dato-valor" data-fecha-texto>{{ fecha_corta($fecha) }}</span>
+                            <span class="ped-dato-sub">Cambiar fecha
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
+                            </span>
+                        </button>
+                        {{-- Toca → elegir el consecutivo (DESP-A, DESP-B…); el número cambia según el elegido. --}}
+                        <button type="button" data-consecutivo-trigger aria-haspopup="dialog" aria-label="Pedido Softland: cambiar consecutivo"
+                                class="ped-dato">
+                            <span class="ped-dato-label">Pedido Softland</span>
+                            <span class="ped-dato-valor" data-numero-pedido>{{ $numeroPedido ? 'N.º '.$numeroPedido : '—' }}</span>
+                            <span class="ped-dato-sub">Consecutivo <b data-consecutivo-texto>{{ $codigoConsecutivo }}</b>
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
+                            </span>
+                        </button>
+                    </div>
                 </section>
 
-                <button class="btn-primary">
-                    {{ $editando ? 'Guardar cambios' : 'Confirmar pedido' }} · <span class="num text-xl" data-cart-total>{{ dinero($resumen['total']) }}</span>
-                </button>
-            </form>
+                <section class="card" aria-label="Confirmar pedido">
+                    <div class="ped-resumen">
+                        <div><span>Artículos</span><span class="num" data-cart-lineas>{{ $resumen['lineas'] }}</span></div>
+                        <div><span>Piezas</span><span class="num" data-cart-piezas>{{ cantidad($resumen['piezas']) }}</span></div>
+                        <div class="ped-total"><span>Total</span><span class="num" data-cart-total>{{ dinero($resumen['total']) }}</span></div>
+                    </div>
+                    <form method="POST" action="{{ route('pedidos.store') }}" class="ped-form" data-confirm-form style="margin-top: 14px">
+                        @csrf
+                        <button class="btn btn-solid ped-confirm">{{ $editando ? 'Guardar cambios' : 'Confirmar pedido' }}</button>
+                        <div>
+                            <label for="notas">Observaciones</label>
+                            <textarea id="notas" name="notas" rows="2" maxlength="2000"
+                                      placeholder="Ej.: ORDEN DE COMPRA No. 121164">{{ old('notas', $observaciones) }}</textarea>
+                            <p class="hint">Va a Softland como observaciones del pedido.</p>
+                        </div>
+                    </form>
+                </section>
+            </aside>
         </div>
     @endif
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Catalogo\Articulo;
 use App\Catalogo\Cantidades;
 use App\Catalogo\Catalogo;
+use App\Catalogo\Imagenes;
 use App\Catalogo\Lote;
 use App\Catalogo\Lotes;
 use App\Models\Pedido;
@@ -19,7 +20,7 @@ use Throwable;
 
 class CarritoController extends Controller
 {
-    public function index(Carrito $carrito, ConsecutivoPedido $consecutivo, Lotes $lotes)
+    public function index(Carrito $carrito, ConsecutivoPedido $consecutivo, Lotes $lotes, Imagenes $imagenes)
     {
         // Consecutivo elegido (por defecto DESP-A), los DESP- que se pueden elegir
         // y el número tentativo que tendría el pedido en Softland (solo lectura).
@@ -46,6 +47,7 @@ class CarritoController extends Controller
         return view('carrito.index', [
             'items' => $carrito->items(),
             'lotes' => $lotesPorArticulo,
+            'imagenes' => $imagenes->urls(array_keys($carrito->items())),
             'resumen' => $carrito->resumen(),
             'cliente' => $carrito->cliente(),
             'numeroPedido' => $numero,
@@ -200,7 +202,7 @@ class CarritoController extends Controller
      *
      * precio: solo si se cambió (manual); precio_nivel=true vuelve al del nivel.
      */
-    public function editar(Request $request, Catalogo $catalogo, Lotes $lotes, Carrito $carrito)
+    public function editar(Request $request, Catalogo $catalogo, Lotes $lotes, Carrito $carrito, Imagenes $imagenes)
     {
         $data = $request->validate([
             'codigo' => ['required', 'string', 'max:50'],
@@ -249,7 +251,7 @@ class CarritoController extends Controller
         $excede = Carrito::excede($item, $lote) > 0;
 
         return response()->json([
-            'html' => view('carrito._linea', ['i' => $item, 'lotesArt' => $disponibles])->render(),
+            'html' => view('carrito._linea', ['i' => $item, 'lotesArt' => $disponibles, 'imagenes' => $imagenes->urls([$articulo->codigo])])->render(),
             'ajustado' => false,
             'excede' => $excede,
             'message' => $excede ? $this->avisoExistencia($articulo, $lote) : null,

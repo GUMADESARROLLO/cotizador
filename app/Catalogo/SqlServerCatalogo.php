@@ -2,6 +2,7 @@
 
 namespace App\Catalogo;
 
+use App\Support\Orden;
 use App\Support\SqlLike;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\Query\Builder;
@@ -48,6 +49,103 @@ class SqlServerCatalogo implements Catalogo
             ->get()
             ->map(Articulo::fromRow(...))
             ->all();
+    }
+
+    public function listar(string $q, string $filtro, int $pagina, int $porPagina, array $codigosPrioridad = [], ?Orden $orden = null, array $valoresOrden = []): array
+    {
+        $q = trim($q);
+        $pagina = max(1, $pagina);
+        $porPagina = max(1, $porPagina);
+
+        $query = $this->base();
+        if ($q !== '') {
+            $this->filtrar($query, $q);
+        }
+
+        if ($filtro === 'existencia') {
+            $query->whereRaw(($this->stock['table'] ?? null)
+                ? 'COALESCE('.$this->wrap('s.cantidad').', 0) > 0'
+                : $this->wrap('a.'.$this->columnas['existencia']).' > 0');
+        } elseif ($filtro === 'prioridad') {
+            // Siempre como texto (ver encontrarVarios); sin códigos, no hay nada que mostrar.
+            $codigos = array_values(array_unique(array_map('strval', $codigosPrioridad)));
+            $codigos === []
+                ? $query->whereRaw('1 = 0')
+                : $query->whereIn('a.'.$this->columnas['codigo'], $codigos);
+        }
+
+        $total = (clone $query)->count();
+        if ($total === 0) {
+            return ['items' => [], 'total' => 0];
+        }
+
+        [$expr, $bindings] = $orden ? $this->expresionOrden($orden->campo, $valoresOrden) : [null, []];
+        if ($expr !== null) {
+            // Columna elegida por el usuario; sin valor (NULL) siempre al final.
+            $query->orderByRaw("CASE WHEN {$expr} IS NULL THEN 1 ELSE 0 END", $bindings)
+                ->orderByRaw("{$expr} {$orden->dir()}", $bindings);
+        } elseif ($q !== '') {
+            // Con búsqueda: coincidencia exacta de código primero.
+            $query->orderByRaw('CASE WHEN '.$this->col('codigo').' = ? THEN 0 ELSE 1 END', [$q]);
+        }
+        // Siempre: descripción y código (orden estable para paginar). SQL Server no admite
+        // repetir una columna en el ORDER BY: se omite la que ya es la elegida.
+        foreach ([$this->col('descripcion'), $this->col('codigo')] as $desempate) {
+            if ($desempate !== $expr) {
+                $query->orderByRaw($desempate);
+            }
+        }
+
+        $items = $query->offset(($pagina - 1) * $porPagina)->limit($porPagina)
+            ->get()
+            ->map(Articulo::fromRow(...))
+            ->all();
+
+        return ['items' => $items, 'total' => $total];
+    }
+
+    /**
+     * Expresión SQL (ya entrecomillada) y bindings de un campo ordenable; [null, []] si no aplica.
+     * categoria/meses vienen de fuera (Reorder Point): CASE código WHEN … THEN valor.
+     *
+     * @param  array<string, string|float|null>  $valores
+     * @return array{0: ?string, 1: list<mixed>}
+     */
+    private function expresionOrden(string $campo, array $valores): array
+    {
+        $c = $this->columnas;
+
+        return match ($campo) {
+            'articulo' => [$this->col('descripcion'), []],
+            'codigo' => [$this->col('codigo'), []],
+            'existencia' => [($this->stock['table'] ?? null)
+                ? 'COALESCE('.$this->wrap('s.cantidad').', 0)'
+                : $this->wrap('a.'.$c['existencia']), []],
+            'precio' => [($this->precio['table'] ?? null)
+                ? 'COALESCE('.$this->wrap('p.precio').', 0)'
+                : $this->wrap('a.'.$c['precio']), []],
+            'categoria', 'meses' => $this->casePorCodigo($valores, $campo === 'meses'),
+            default => [null, []],
+        };
+    }
+
+    /** @return array{0: ?string, 1: list<mixed>} */
+    private function casePorCodigo(array $valores, bool $numerico): array
+    {
+        $valores = array_filter($valores, fn ($v) => $v !== null && $v !== '');
+        if ($valores === []) {
+            return [null, []];
+        }
+
+        $sql = 'CASE '.$this->col('codigo');
+        $bindings = [];
+        foreach ($valores as $codigo => $valor) {
+            // CAST: si no, SQL Server compara el número como texto ("10.6" < "9.0").
+            $sql .= $numerico ? ' WHEN ? THEN CAST(? AS FLOAT)' : ' WHEN ? THEN ?';
+            array_push($bindings, (string) $codigo, $numerico ? (float) $valor : (string) $valor);
+        }
+
+        return [$sql.' ELSE NULL END', $bindings];
     }
 
     /** Cada palabra debe aparecer en el código o en la descripción. */

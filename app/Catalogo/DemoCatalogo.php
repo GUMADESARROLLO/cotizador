@@ -2,6 +2,7 @@
 
 namespace App\Catalogo;
 
+use App\Support\Orden;
 use Illuminate\Support\Str;
 
 /**
@@ -40,6 +41,43 @@ class DemoCatalogo implements Catalogo
         });
 
         return array_slice(array_values($res), 0, $limite ?? 30);
+    }
+
+    public function listar(string $q, string $filtro, int $pagina, int $porPagina, array $codigosPrioridad = [], ?Orden $orden = null, array $valoresOrden = []): array
+    {
+        $todos = trim($q) === '' ? array_values($this->articulos) : $this->buscar($q, PHP_INT_MAX);
+
+        $prioridad = array_map('strval', $codigosPrioridad);
+        $todos = match ($filtro) {
+            'existencia' => array_values(array_filter($todos, fn (Articulo $a) => $a->existencia > 0)),
+            'prioridad' => array_values(array_filter($todos, fn (Articulo $a) => in_array($a->codigo, $prioridad, true))),
+            default => $todos,
+        };
+
+        if ($orden) {
+            $valor = fn (Articulo $a) => match ($orden->campo) {
+                'articulo' => $a->descripcion,
+                'codigo' => $a->codigo,
+                'existencia' => $a->existencia,
+                'precio' => $a->precio,
+                default => $valoresOrden[$a->codigo] ?? null,
+            };
+            // Sin valor al final; empate: descripción (como en SQL Server).
+            usort($todos, function (Articulo $a, Articulo $b) use ($valor, $orden) {
+                [$x, $y] = [$valor($a), $valor($b)];
+                if (($x === null) !== ($y === null)) {
+                    return $x === null ? 1 : -1;
+                }
+                $r = is_string($x) ? strnatcasecmp($x, (string) $y) : $x <=> $y;
+
+                return ($orden->desc ? -$r : $r) ?: strcmp($a->descripcion, $b->descripcion);
+            });
+        }
+
+        return [
+            'items' => array_slice($todos, (max(1, $pagina) - 1) * $porPagina, $porPagina),
+            'total' => count($todos),
+        ];
     }
 
     public function encontrar(string $codigo): ?Articulo

@@ -64,4 +64,21 @@ class HistorialFechasTest extends TestCase
     {
         $this->get('/pedidos?desde=26/11/2026')->assertRedirect();
     }
+
+    public function test_ordena_por_columna_y_conserva_el_orden_al_filtrar(): void
+    {
+        Pedido::where('cliente', 'CLIENTE VIEJO')->update(['total' => 300]);
+        Pedido::where('cliente', 'CLIENTE HOY')->update(['total' => 50]);
+
+        // Por defecto: más reciente primero.
+        $this->get('/pedidos')->assertSeeInOrder(['CLIENTE HOY', 'CLIENTE MARTES', 'CLIENTE VIEJO']);
+        $this->get('/pedidos?o=total&d=desc')
+            ->assertSeeInOrder(['CLIENTE VIEJO', 'CLIENTE HOY', 'CLIENTE MARTES'])
+            ->assertSee('aria-sort="descending"', false)
+            // el formulario de filtros lleva el orden para no perderlo
+            ->assertSee('name="o" value="total"', false);
+        $this->get('/pedidos?o=cliente')->assertSeeInOrder(['CLIENTE HOY', 'CLIENTE MARTES', 'CLIENTE VIEJO']);
+        $this->get('/pedidos?o=cliente&d=desc')->assertSeeInOrder(['CLIENTE VIEJO', 'CLIENTE MARTES', 'CLIENTE HOY']);
+        $this->get('/pedidos?o=fecha')->assertSeeInOrder(['CLIENTE VIEJO', 'CLIENTE MARTES', 'CLIENTE HOY']);
+    }
 }

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Catalogo\SqlServerCatalogo;
+use App\Support\Orden;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
@@ -226,5 +227,79 @@ class SqlServerCatalogoTest extends TestCase
     {
         $res = $this->catalogo->encontrarVarios(['A-100', 'A-102', 'NO']);
         $this->assertEqualsCanonicalizing(['A-100', 'A-102'], array_keys($res));
+    }
+
+    public function test_listar_pagina_todo_el_catalogo_con_total(): void
+    {
+        $p1 = $this->catalogo->listar('', 'todos', 1, 2);
+        $p2 = $this->catalogo->listar('', 'todos', 2, 2);
+
+        // Activos ordenados por descripción: Codo, Descuento, Tubo (A-999 inactivo no cuenta).
+        $this->assertSame(3, $p1['total']);
+        $this->assertSame(['A-101', 'A-102'], array_map(fn ($a) => $a->codigo, $p1['items']));
+        $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $p2['items']));
+        $this->assertSame([], $this->catalogo->listar('', 'todos', 9, 2)['items']);
+    }
+
+    public function test_listar_con_busqueda_y_filtros(): void
+    {
+        $this->assertSame(1, $this->catalogo->listar('tubo', 'todos', 1, 20)['total']);
+        $this->assertSame(0, $this->catalogo->listar('nada', 'todos', 1, 20)['total']);
+
+        // Con existencia: A-101 tiene -2 (cuenta como sin existencia).
+        $con = $this->catalogo->listar('', 'existencia', 1, 20);
+        $this->assertSame(2, $con['total']);
+        $this->assertEqualsCanonicalizing(['A-100', 'A-102'], array_map(fn ($a) => $a->codigo, $con['items']));
+
+        // Prioridad: solo los códigos indicados (y sin códigos, nada).
+        $prio = $this->catalogo->listar('', 'prioridad', 1, 20, ['A-102', 'A-999']);
+        $this->assertSame(['A-102'], array_map(fn ($a) => $a->codigo, $prio['items']));
+        $this->assertSame(0, $this->catalogo->listar('', 'prioridad', 1, 20, [])['total']);
+    }
+
+    public function test_listar_busqueda_pone_primero_el_codigo_exacto(): void
+    {
+        $res = $this->catalogo->listar('A-102', 'todos', 1, 20);
+        $this->assertSame('A-102', $res['items'][0]->codigo);
+    }
+
+    public function test_listar_existencia_filtra_con_tabla_de_bodegas(): void
+    {
+        Schema::create('exist_bod', function ($t) {
+            $t->string('ARTICULO');
+            $t->string('BODEGA');
+            $t->decimal('CANT_DISPONIBLE', 12, 2);
+        });
+        DB::table('exist_bod')->insert([
+            ['ARTICULO' => 'A-100', 'BODEGA' => '006', 'CANT_DISPONIBLE' => 7],
+            ['ARTICULO' => 'A-102', 'BODEGA' => '002', 'CANT_DISPONIBLE' => 500],
+        ]);
+        $catalogo = new SqlServerCatalogo(
+            db: DB::connection(),
+            tabla: 'inv_art',
+            columnas: ['codigo' => 'CVE_ART', 'descripcion' => 'DESCR', 'unidad' => 'UNI_MED', 'precio' => 'PRECIO1', 'existencia' => 'EXIST'],
+            whereRaw: 'ACTIVO = 1',
+            stock: ['table' => 'exist_bod', 'articulo' => 'ARTICULO', 'cantidad' => 'CANT_DISPONIBLE', 'bodega' => 'BODEGA', 'incluir' => ['006']],
+        );
+
+        $res = $catalogo->listar('', 'existencia', 1, 20);
+        $this->assertSame(['A-100'], array_map(fn ($a) => $a->codigo, $res['items']));
+        $this->assertSame(1, $res['total']);
+        $this->assertSame(3, $catalogo->listar('', 'todos', 1, 20)['total']);
+    }
+
+    public function test_listar_ordena_por_columna_y_por_valores_externos(): void
+    {
+        $codigos = fn (array $r) => array_map(fn ($a) => $a->codigo, $r['items']);
+
+        $porPrecio = $this->catalogo->listar('', 'todos', 1, 10, [], new Orden('precio', desc: true));
+        $this->assertSame(['A-100', 'A-101', 'A-102'], $codigos($porPrecio));
+
+        // Meses (Reorder Point): numérico (10.6 > 9.0, no como texto) y sin valor al final.
+        $valores = ['A-101' => 10.6, 'A-102' => 9.0];
+        $asc = $this->catalogo->listar('', 'todos', 1, 10, [], new Orden('meses'), $valores);
+        $this->assertSame(['A-102', 'A-101', 'A-100'], $codigos($asc));
+        $desc = $this->catalogo->listar('', 'todos', 1, 10, [], new Orden('meses', desc: true), $valores);
+        $this->assertSame(['A-101', 'A-102', 'A-100'], $codigos($desc));
     }
 }

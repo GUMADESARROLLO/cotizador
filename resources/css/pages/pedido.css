@@ -1,0 +1,450 @@
+/* Estilos de Pedido en curso, Historial, detalle de pedido y vista previa Softland. */
+@layer components {
+    /* ---------- Distribución: tabla de líneas + columna lateral ---------- */
+    .ped-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 20px;
+        margin-top: 20px;
+    }
+    @media (min-width: 1100px) {
+        .ped-grid {
+            grid-template-columns: minmax(0, 1fr) 360px;
+        }
+        .ped-side {
+            position: sticky;
+            top: 84px;
+        }
+    }
+    .ped-main,
+    .ped-side {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .ped-block {
+        margin-top: 20px;
+    }
+
+    .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 12px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--color-border-soft);
+    }
+    .card-head h2 {
+        margin: 0;
+        color: var(--color-ink);
+        font-size: 15px;
+        font-weight: 650;
+    }
+    .card-head small {
+        color: var(--color-ink-soft);
+        font-size: 12.5px;
+    }
+    .eyebrow {
+        color: var(--color-cyan-ink);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    /* ---------- Avisos ---------- */
+    .ped-edit,
+    .ped-flash {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 16px;
+        padding: 12px 16px;
+        border: 1px solid var(--color-cyan);
+        border-radius: 14px;
+        background: var(--color-cyan-soft);
+        color: var(--color-ink);
+    }
+    .ped-flash {
+        justify-content: flex-start;
+        font-weight: 650;
+    }
+    .ped-flash svg {
+        flex: none;
+        color: var(--color-ok);
+    }
+    .ped-edit strong {
+        display: block;
+        font-size: 15px;
+    }
+    .ped-aviso {
+        padding: 12px 16px;
+        border-radius: 14px;
+        background: var(--color-warn-soft);
+        color: var(--color-warn);
+        font-size: 13.5px;
+        font-weight: 600;
+    }
+    .ped-aviso.is-bad {
+        background: var(--color-danger-soft);
+        color: var(--color-danger);
+    }
+    .ped-aviso[hidden] {
+        display: none;
+    }
+
+    /* ---------- Cliente del pedido ---------- */
+    .ped-cliente {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+    }
+    .ped-cliente-body {
+        min-width: 0;
+        flex: 1;
+    }
+    .ped-cliente-nombre {
+        margin: 2px 0 0;
+        color: var(--color-ink);
+        font-size: 15px;
+        font-weight: 650;
+        line-height: 1.3;
+    }
+    .ped-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 10px;
+        margin-top: 6px;
+        color: var(--color-ink-soft);
+        font-size: 12.5px;
+    }
+    .ped-meta .num {
+        color: var(--color-ink);
+        font-weight: 700;
+    }
+    .ped-cliente-aviso {
+        margin: 0;
+        padding: 10px 16px;
+        border-top: 1px solid var(--color-border-soft);
+        background: var(--color-warn-soft);
+        color: var(--color-warn);
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .ped-cliente-aviso[hidden] {
+        display: none;
+    }
+
+    /* ---------- Fecha y consecutivo (botones grandes) ---------- */
+    .ped-datos {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    .ped-dato {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        padding: 12px 16px;
+        background: transparent;
+        color: var(--color-ink);
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 120ms ease;
+    }
+    .ped-dato + .ped-dato {
+        border-left: 1px solid var(--color-border-soft);
+    }
+    .ped-dato:hover {
+        background: var(--color-hover);
+    }
+    .ped-dato:focus-visible {
+        outline: 2px solid var(--color-royal);
+        outline-offset: -2px;
+    }
+    .ped-dato-label {
+        color: var(--color-ink-soft);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    .ped-dato-valor {
+        font: 700 20px / 1.2 var(--font-num);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .ped-dato-sub {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--color-ink-soft);
+        font-size: 12px;
+    }
+    .ped-dato-sub b {
+        color: var(--color-ink);
+    }
+    .ped-dato svg {
+        color: var(--color-royal);
+    }
+
+    /* ---------- Totales y observaciones ---------- */
+    .ped-resumen {
+        display: grid;
+        gap: 6px;
+        padding: 14px 16px 4px;
+    }
+    .ped-resumen > div {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--color-ink-soft);
+        font-size: 13.5px;
+    }
+    .ped-resumen .num {
+        color: var(--color-ink);
+        font: 600 16px var(--font-num);
+        font-variant-numeric: tabular-nums;
+    }
+    .ped-resumen .ped-total {
+        margin-top: 4px;
+        padding-top: 10px;
+        border-top: 1px solid var(--color-border-soft);
+        color: var(--color-ink);
+        font-size: 14px;
+        font-weight: 650;
+    }
+    .ped-resumen .ped-total .num {
+        font: 700 30px / 1 var(--font-num);
+        letter-spacing: 0.02em;
+    }
+    .ped-form {
+        display: grid;
+        gap: 14px;
+        padding: 0 16px 16px;
+    }
+    .ped-form label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--color-ink-soft);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .ped-form textarea {
+        display: block;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        font-size: 14px;
+        resize: none;
+        outline: none;
+        transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .ped-form textarea:focus {
+        border-color: var(--color-royal);
+        box-shadow: 0 0 0 3px rgb(43 59 158 / 0.15);
+    }
+    .ped-form .hint {
+        margin: 6px 0 0;
+        color: var(--color-ink-soft);
+        font-size: 12px;
+    }
+    .ped-confirm {
+        width: 100%;
+        min-height: 46px;
+        font-size: 15px;
+    }
+
+    /* ---------- Líneas del pedido ---------- */
+    .tbl tbody tr[data-editar-articulo] {
+        cursor: pointer;
+    }
+    .tbl tbody tr.is-ajustado {
+        background: var(--color-warn-soft);
+    }
+    .tbl tbody tr.is-ajustado:hover {
+        background: #ffe9c7;
+    }
+    .tbl tbody tr.row-leaving {
+        opacity: 0;
+        transition: opacity 180ms ease;
+    }
+    .ped-art {
+        display: flex;
+        min-width: 260px;
+        align-items: center;
+        gap: 12px;
+    }
+    .ped-art-desc {
+        display: block;
+        color: var(--color-ink);
+        font-size: 13.5px;
+        font-weight: 650;
+        line-height: 1.3;
+        text-transform: uppercase;
+    }
+    .ped-art-sub {
+        display: block;
+        margin-top: 2px;
+        color: var(--color-ink-soft);
+        font-size: 12.5px;
+    }
+    .ped-art-sub .num {
+        font-weight: 700;
+    }
+    .ped-warn {
+        display: block;
+        margin-top: 4px;
+        color: var(--color-warn);
+        font-size: 12.5px;
+        font-weight: 600;
+    }
+    .tbl .td-num .u {
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .tbl .td-num .td-sub .num,
+    .tbl .td-num .td-sub {
+        font-size: 12.5px;
+        font-weight: 500;
+    }
+    .tbl .td-total {
+        font-size: 17px;
+        font-weight: 700;
+    }
+    .tbl .td-chev {
+        width: 28px;
+        padding-left: 0;
+        color: var(--color-faint);
+    }
+    .tbl tfoot td {
+        padding: 14px 16px;
+        border-top: 1px solid var(--color-line);
+        background: #f7f9fc;
+        color: var(--color-ink);
+        font-weight: 650;
+    }
+    .tbl tfoot .td-num {
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    /* ---------- Historial ---------- */
+    .hist-fecha {
+        display: inline-flex;
+        height: 38px;
+        min-width: 150px;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        font-size: 13.5px;
+        cursor: pointer;
+        transition: background-color 150ms ease, border-color 150ms ease;
+    }
+    .hist-fecha:hover {
+        background: var(--color-hover);
+    }
+    .hist-fecha small {
+        color: var(--color-ink-soft);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .hist-fecha b {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    .hist-fecha.is-vacio b {
+        color: var(--color-faint);
+        font-weight: 500;
+    }
+    .hist-fecha svg {
+        margin-left: auto;
+        color: var(--color-royal);
+    }
+    .hist-rango {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--color-border-soft);
+        background: var(--color-cyan-soft);
+        color: var(--color-ink);
+        font-size: 13px;
+    }
+    .hist-rango a {
+        color: var(--color-royal);
+        font-weight: 650;
+    }
+    .pager a.pager-btn {
+        text-decoration: none;
+    }
+    .pager .pager-gap {
+        display: inline-grid;
+        min-width: 20px;
+        place-items: center;
+        color: var(--color-faint);
+    }
+
+    /* ---------- Vista previa Softland ---------- */
+    .sl-campo {
+        color: var(--color-ink);
+        font-family: var(--font-num);
+        font-size: 14.5px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .sl-valor {
+        max-width: 380px;
+        color: var(--color-ink);
+        font-weight: 600;
+        word-break: break-word;
+    }
+    .sl-origen {
+        color: var(--color-ink-soft);
+        font-size: 12.5px;
+    }
+}
+
+@media (max-width: 767px) {
+    .ped-datos {
+        grid-template-columns: 1fr;
+    }
+    .ped-dato + .ped-dato {
+        border-top: 1px solid var(--color-border-soft);
+        border-left: 0;
+    }
+}
+
+@media print {
+    .ped-side,
+    .no-print {
+        break-inside: avoid;
+    }
+    .ped-grid {
+        grid-template-columns: 1fr;
+    }
+}
