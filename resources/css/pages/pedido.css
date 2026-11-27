@@ -532,6 +532,77 @@
     }
 }
 
+/* Observaciones del pedido en curso: editor minimalista a todo el ancho. */
+@layer components {
+    .ped-confirm-top {
+        min-width: 170px;
+    }
+    .obs-editor {
+        overflow: hidden;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        background: var(--color-paper);
+        transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .obs-editor:focus-within {
+        border-color: var(--color-royal);
+        box-shadow: 0 0 0 3px rgb(43 59 158 / 0.14);
+    }
+    .obs-barra {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--color-border-soft);
+        background: var(--color-mist);
+    }
+    .obs-btn {
+        display: inline-flex;
+        height: 30px;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--color-ink-soft);
+        font: 600 12.5px var(--font-sans);
+        cursor: pointer;
+    }
+    .obs-btn:hover {
+        background: var(--color-paper);
+        color: var(--color-royal);
+    }
+    .obs-btn:focus-visible {
+        outline: 2px solid var(--color-royal);
+        outline-offset: 1px;
+    }
+    .obs-aa {
+        font: 800 11px var(--font-num);
+        letter-spacing: 0.04em;
+    }
+    .obs-contador {
+        margin-left: auto;
+        padding-right: 4px;
+        color: var(--color-ink-soft);
+        font: 600 12px var(--font-num);
+        font-variant-numeric: tabular-nums;
+    }
+    .obs-contador.is-limite {
+        color: var(--color-warn);
+    }
+    .ped-confirmar-obs .obs-editor textarea {
+        display: block;
+        min-height: 72px;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none !important;
+        resize: none;
+        line-height: 1.5;
+    }
+}
+
 /* Diálogo "Cotización en Excel" (detalle del pedido) */
 @layer components {
     .dlg {
@@ -705,6 +776,12 @@
     }
     .tbl-cot td.cot-c {
         white-space: nowrap;
+    }
+    /* Código del artículo bajo la descripción (como en /pedido). */
+    .tbl-cot .cot-codigo {
+        margin-top: 2px;
+        font: 700 15px var(--font-num);
+        letter-spacing: 0.02em;
     }
 }
 

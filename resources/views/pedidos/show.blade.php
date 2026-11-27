@@ -136,7 +136,6 @@
     {{-- Observaciones del pedido (van a Softland): a la vista, antes de los artículos. --}}
     @if ($pedido->notas)
         <section class="card ped-notas" aria-label="Observaciones">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <div>
                 <p class="eyebrow">Observaciones</p>
                 <p class="ped-notas-texto">{{ $pedido->notas }}</p>
@@ -175,7 +174,10 @@
                         <tr>
                             <td class="cot-c">{{ $n + 1 }}</td>
                             <td class="td-num">{{ cantidad($l['cantidad']) }}</td>
-                            <td class="cot-desc" title="{{ $item?->codigo }}">{{ $l['descripcion'] }}</td>
+                            <td class="cot-desc" data-v="{{ $l['descripcion'] }}">
+                                {{ $l['descripcion'] }}
+                                @if ($item?->codigo)<span class="td-sub cot-codigo">{{ $item->codigo }}</span>@endif
+                            </td>
                             <td class="cot-c">{{ $l['concentracion'] }}</td>
                             {{-- Precio con todos sus decimales si los tiene (1.4108 por cápsula), como el Excel. --}}
                             <td class="td-num">{{ number_format($l['precio'], round($l['precio'], 2) == $l['precio'] ? 2 : 4) }}</td>

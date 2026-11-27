@@ -2,6 +2,8 @@
     <x-slot:actions>
         @if (count($items))
             <a href="{{ route('softland.vista-previa') }}" class="btn btn-line">Ver datos para Softland</a>
+            {{-- Envía el formulario de observaciones (form="form-confirmar"); ver initConfirmForm en app.js. --}}
+            <button form="form-confirmar" class="btn btn-solid ped-confirm-top">{{ $editando ? 'Guardar cambios' : 'Confirmar pedido' }}</button>
         @endif
         <a href="{{ route('articulos.index') }}" class="btn btn-line">Agregar artículos</a>
         @if (count($items))
@@ -70,17 +72,33 @@
                 </div>
             </div>
 
-            {{-- Observaciones (van a Softland) y confirmar: el primer <button> del form es el de enviar. --}}
-            <form method="POST" action="{{ route('pedidos.store') }}" data-confirm-form class="card ped-notas ped-confirmar">
+            {{-- Observaciones (van a Softland). El botón que envía está en el encabezado (form="form-confirmar"). --}}
+            <form method="POST" action="{{ route('pedidos.store') }}" id="form-confirmar" data-confirm-form class="card ped-notas ped-confirmar">
                 @csrf
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <div class="ped-confirmar-obs">
                     <label for="notas" class="eyebrow">Observaciones</label>
-                    <textarea id="notas" name="notas" rows="1" maxlength="2000"
-                              placeholder="Ej.: ORDEN DE COMPRA No. 121164">{{ old('notas', $observaciones) }}</textarea>
-                    <p class="hint">Va a Softland como observaciones del pedido.</p>
+                    {{-- Editor minimalista de texto plano: Softland guarda las observaciones como texto simple. --}}
+                    <div class="obs-editor" data-obs-editor>
+                        <div class="obs-barra" role="toolbar" aria-label="Formato de las observaciones">
+                            <button type="button" class="obs-btn" data-obs="vineta" title="Viñeta al inicio de la línea">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4" cy="6" r="1.2" fill="currentColor"/><circle cx="4" cy="12" r="1.2" fill="currentColor"/><circle cx="4" cy="18" r="1.2" fill="currentColor"/></svg>
+                                Viñeta
+                            </button>
+                            <button type="button" class="obs-btn" data-obs="mayusculas" title="Pasar a MAYÚSCULAS (la selección o todo)">
+                                <span class="obs-aa" aria-hidden="true">AA</span>
+                                Mayúsculas
+                            </button>
+                            <button type="button" class="obs-btn" data-obs="limpiar" title="Borrar las observaciones">
+                                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                                Limpiar
+                            </button>
+                            <span class="obs-contador" data-obs-contador aria-live="polite">0 / 2000</span>
+                        </div>
+                        <textarea id="notas" name="notas" rows="3" maxlength="2000"
+                                  placeholder="Ej.: ORDEN DE COMPRA No. 121164">{{ old('notas', $observaciones) }}</textarea>
+                    </div>
+                    <p class="hint">Texto simple: va a Softland como observaciones del pedido.</p>
                 </div>
-                <button class="btn btn-solid ped-confirm">{{ $editando ? 'Guardar cambios' : 'Confirmar pedido' }}</button>
             </form>
 
             <section class="card" aria-label="Artículos del pedido">

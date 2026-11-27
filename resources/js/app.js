@@ -1001,7 +1001,8 @@ function initConfirmForm() {
     const form = $('[data-confirm-form]');
     if (!form) return;
     form.addEventListener('submit', (e) => {
-        const btn = $('button', form);
+        // El botón puede estar dentro del form o fuera (en el encabezado, con form="id").
+        const btn = (form.id && $(`button[form="${form.id}"]`)) || $('button[type="submit"], button:not([type])', form);
         if (isSyncing()) {
             e.preventDefault();
             btn.disabled = true;
