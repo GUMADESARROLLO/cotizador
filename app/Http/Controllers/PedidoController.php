@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Catalogo\Catalogo;
+use App\Catalogo\Lote;
 use App\Catalogo\Lotes;
 use App\Clientes\Cliente;
 use App\Clientes\Clientes;
+use App\Cotizaciones\CotizacionExcel;
+use App\Cotizaciones\FichaCotizacion;
 use App\Models\Pedido;
 use App\Pedidos\Carrito;
 use App\Pedidos\Linea;
@@ -109,7 +112,35 @@ class PedidoController extends Controller
             'pedido' => $pedido->load('items'),
             'cliente' => $cliente,
             'numeroTentativo' => $numeroTentativo,
+            // Datos del cliente para el diálogo de la cotización en Excel (recordados por cliente).
+            'ficha' => $ficha = FichaCotizacion::prellenar($pedido, $cliente),
+            // Líneas con el formato de la cotización (mismos datos que el Excel).
+            'cotizacion' => CotizacionExcel::datos($pedido, $cliente, $ficha, self::lotesDe($pedido, app('lotes.cotizacion'))),
+            'tiempoEntrega' => config('cotizacion.tiempo_entrega'),
+            'responsables' => FichaCotizacion::responsables($pedido),
         ]);
+    }
+
+    /**
+     * Lotes en bodega de los artículos del pedido (para la fecha de vencimiento de la
+     * cotización cuando la línea no tiene lote guardado). Si Softland falla: sin lotes.
+     *
+     * @return array<string, list<Lote>>
+     */
+    public static function lotesDe(Pedido $pedido, Lotes $lotes): array
+    {
+        $sinLote = $pedido->items->filter(fn ($i) => ! $i->lote_vence)->pluck('codigo')->unique()->values()->all();
+        if ($sinLote === []) {
+            return [];
+        }
+
+        try {
+            return $lotes->porArticulos($sinLote);
+        } catch (Throwable $e) {
+            Log::warning("Lotes del pedido {$pedido->id}: ".$e->getMessage());
+
+            return [];
+        }
     }
 
     public function store(Request $request, Catalogo $catalogo, Lotes $lotes, Clientes $clientes, Carrito $carrito)

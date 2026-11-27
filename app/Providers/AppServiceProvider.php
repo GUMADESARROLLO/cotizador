@@ -82,6 +82,15 @@ class AppServiceProvider extends ServiceProvider
                 bodega: config('softland.bodega'),
             ));
 
+        // Lotes para la fecha de vencimiento de la cotización (varias bodegas, ver config/cotizacion.php).
+        $this->app->bind('lotes.cotizacion', fn ($app) => config('softland.driver') === 'demo'
+            ? new DemoLotes($app->make(Catalogo::class))
+            : new SqlServerLotes(
+                db: DB::connection(config('softland.connection')),
+                esquema: config('softland.esquema'),
+                bodega: config('cotizacion.bodegas_vence'),
+            ));
+
         // Arma (sin insertar) el pedido de Softland.
         $this->app->bind(PedidoSoftland::class, fn () => new PedidoSoftland(
             db: DB::connection(config('softland.connection')),

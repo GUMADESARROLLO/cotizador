@@ -6,7 +6,8 @@
         <a href="{{ route('articulos.index') }}" class="btn btn-line">Agregar artículos</a>
         @if (count($items))
             <form method="POST" action="{{ route('carrito.vaciar') }}"
-                  onsubmit="return confirm('¿Vaciar el pedido? Se quitarán todos los artículos.')">
+                  data-swal-confirm="¿Vaciar el pedido?" data-swal-texto="Se quitarán todos los artículos."
+                  data-swal-boton="Sí, vaciar" data-swal-peligro>
                 @csrf @method('DELETE')
                 <button class="btn btn-line" style="color: var(--color-danger)">Vaciar</button>
             </form>
@@ -35,85 +36,82 @@
     </div>
 
     @if (count($items))
-        <div data-cart-content class="ped-grid">
-            <div class="ped-main">
-                <section class="card" aria-label="Artículos del pedido">
-                    <div class="card-head">
-                        <h2>Artículos · <span data-cart-lineas>{{ $resumen['lineas'] }}</span></h2>
-                        <small>Toca una fila para editar cantidad, precio o lote</small>
-                    </div>
-                    <div class="tbl-box">
-                        <table class="tbl" data-orden-local>
-                            <thead>
-                                <tr>
-                                    <x-th-orden campo="articulo">Artículo</x-th-orden>
-                                    <x-th-orden campo="cantidad" class="th-num">Cantidad</x-th-orden>
-                                    <x-th-orden campo="precio" class="th-num">Precio</x-th-orden>
-                                    <x-th-orden campo="subtotal" class="th-num">Subtotal</x-th-orden>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody data-cart-lista>
-                                @foreach ($items as $i)
-                                    @include('carrito._linea', [
-                                        'i' => $i,
-                                        'lotesArt' => $lotes[$i['codigo']] ?? [],
-                                        'imagenes' => $imagenes ?? [],
-                                        'ajustado' => in_array($i['codigo'], session('ajustados', [])),
-                                    ])
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            </div>
-
-            <aside class="ped-side">
+        {{-- Misma estructura que el detalle de un pedido guardado: resumen arriba
+             (cliente · fecha · N.º Softland · total), observaciones + confirmar y la tabla. --}}
+        <div data-cart-content class="ped-pagina">
+            <div class="ped-cabecera">
                 @include('pedidos._cliente', ['cliente' => $cliente, 'total' => $resumen['total'], 'cambiar' => true])
 
-                {{-- Datos del pedido: fecha (abre el calendario) y número tentativo en Softland (abre el consecutivo). --}}
-                <section class="card" aria-label="Datos del pedido">
-                    <div class="ped-datos">
-                        {{-- Fecha: hoy por defecto; se puede poner otra (p. ej. armarlo hoy con fecha del lunes). --}}
-                        <button type="button" data-fecha-trigger aria-haspopup="dialog" aria-label="Cambiar fecha del pedido"
-                                data-fecha="{{ $fecha->format('Y-m-d') }}" data-hoy="{{ today()->format('Y-m-d') }}" data-min="{{ $fechaMin->format('Y-m-d') }}" data-max="{{ $fechaMax->format('Y-m-d') }}"
-                                class="ped-dato">
-                            <span class="ped-dato-label">Fecha del pedido</span>
-                            <span class="ped-dato-valor" data-fecha-texto>{{ fecha_corta($fecha) }}</span>
-                            <span class="ped-dato-sub">Cambiar fecha
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
-                            </span>
-                        </button>
-                        {{-- Toca → elegir el consecutivo (DESP-A, DESP-B…); el número cambia según el elegido. --}}
-                        <button type="button" data-consecutivo-trigger aria-haspopup="dialog" aria-label="Pedido Softland: cambiar consecutivo"
-                                class="ped-dato">
-                            <span class="ped-dato-label">Pedido Softland</span>
-                            <span class="ped-dato-valor" data-numero-pedido>{{ $numeroPedido ? 'N.º '.$numeroPedido : '—' }}</span>
-                            <span class="ped-dato-sub">Consecutivo <b data-consecutivo-texto>{{ $codigoConsecutivo }}</b>
-                                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
-                            </span>
-                        </button>
-                    </div>
-                </section>
+                {{-- Fecha: hoy por defecto; se puede poner otra (p. ej. armarlo hoy con fecha del lunes). --}}
+                <button type="button" data-fecha-trigger aria-haspopup="dialog" aria-label="Cambiar fecha del pedido"
+                        data-fecha="{{ $fecha->format('Y-m-d') }}" data-hoy="{{ today()->format('Y-m-d') }}" data-min="{{ $fechaMin->format('Y-m-d') }}" data-max="{{ $fechaMax->format('Y-m-d') }}"
+                        class="kpi kpi-btn">
+                    <span class="kpi-label">Fecha del pedido</span>
+                    <span class="kpi-value" style="font-size: 24px" data-fecha-texto>{{ fecha_corta($fecha) }}</span>
+                    <span class="kpi-sub kpi-accion">Cambiar fecha
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
+                    </span>
+                </button>
 
-                <section class="card" aria-label="Confirmar pedido">
-                    <div class="ped-resumen">
-                        <div><span>Artículos</span><span class="num" data-cart-lineas>{{ $resumen['lineas'] }}</span></div>
-                        <div><span>Piezas</span><span class="num" data-cart-piezas>{{ cantidad($resumen['piezas']) }}</span></div>
-                        <div class="ped-total"><span>Total</span><span class="num" data-cart-total>{{ dinero($resumen['total']) }}</span></div>
-                    </div>
-                    <form method="POST" action="{{ route('pedidos.store') }}" class="ped-form" data-confirm-form style="margin-top: 14px">
-                        @csrf
-                        <button class="btn btn-solid ped-confirm">{{ $editando ? 'Guardar cambios' : 'Confirmar pedido' }}</button>
-                        <div>
-                            <label for="notas">Observaciones</label>
-                            <textarea id="notas" name="notas" rows="2" maxlength="2000"
-                                      placeholder="Ej.: ORDEN DE COMPRA No. 121164">{{ old('notas', $observaciones) }}</textarea>
-                            <p class="hint">Va a Softland como observaciones del pedido.</p>
-                        </div>
-                    </form>
-                </section>
-            </aside>
+                {{-- Toca → elegir el consecutivo (DESP-A, DESP-B…); el número cambia según el elegido. --}}
+                <button type="button" data-consecutivo-trigger aria-haspopup="dialog" aria-label="Pedido Softland: cambiar consecutivo"
+                        class="kpi kpi-btn">
+                    <span class="kpi-label">Pedido Softland</span>
+                    <span class="kpi-value" style="font-size: 24px" data-numero-pedido>{{ $numeroPedido ? 'N.º '.$numeroPedido : '—' }}</span>
+                    <span class="kpi-sub kpi-accion">Consecutivo <b data-consecutivo-texto>{{ $codigoConsecutivo }}</b>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.3 8.3a1 1 0 0 1 1.4 0l6.3 6.29 6.3-6.3a1 1 0 1 1 1.4 1.42l-7 7a1 1 0 0 1-1.4 0l-7-7a1 1 0 0 1 0-1.42Z"/></svg>
+                    </span>
+                </button>
+
+                <div class="kpi">
+                    <p class="kpi-label">Total</p>
+                    <p class="kpi-value" style="color: var(--color-royal)" data-cart-total>{{ dinero($resumen['total']) }}</p>
+                    <p class="kpi-sub"><span data-cart-lineas>{{ $resumen['lineas'] }}</span> artículo(s) · <span data-cart-piezas>{{ cantidad($resumen['piezas']) }}</span> pieza(s)</p>
+                </div>
+            </div>
+
+            {{-- Observaciones (van a Softland) y confirmar: el primer <button> del form es el de enviar. --}}
+            <form method="POST" action="{{ route('pedidos.store') }}" data-confirm-form class="card ped-notas ped-confirmar">
+                @csrf
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <div class="ped-confirmar-obs">
+                    <label for="notas" class="eyebrow">Observaciones</label>
+                    <textarea id="notas" name="notas" rows="1" maxlength="2000"
+                              placeholder="Ej.: ORDEN DE COMPRA No. 121164">{{ old('notas', $observaciones) }}</textarea>
+                    <p class="hint">Va a Softland como observaciones del pedido.</p>
+                </div>
+                <button class="btn btn-solid ped-confirm">{{ $editando ? 'Guardar cambios' : 'Confirmar pedido' }}</button>
+            </form>
+
+            <section class="card" aria-label="Artículos del pedido">
+                <div class="card-head">
+                    <h2><span data-cart-lineas>{{ $resumen['lineas'] }}</span> artículo(s)</h2>
+                    <small>Toca una fila para editar cantidad, precio o lote</small>
+                </div>
+                <div class="tbl-box">
+                    <table class="tbl" data-orden-local>
+                        <thead>
+                            <tr>
+                                <x-th-orden campo="articulo">Artículo</x-th-orden>
+                                <x-th-orden campo="cantidad" class="th-num">Cantidad</x-th-orden>
+                                <x-th-orden campo="precio" class="th-num">Precio</x-th-orden>
+                                <x-th-orden campo="subtotal" class="th-num">Subtotal</x-th-orden>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody data-cart-lista>
+                            @foreach ($items as $i)
+                                @include('carrito._linea', [
+                                    'i' => $i,
+                                    'lotesArt' => $lotes[$i['codigo']] ?? [],
+                                    'imagenes' => $imagenes ?? [],
+                                    'ajustado' => in_array($i['codigo'], session('ajustados', [])),
+                                ])
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     @endif
 

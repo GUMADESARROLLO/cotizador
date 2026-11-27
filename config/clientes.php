@@ -40,6 +40,7 @@ return [
         'telefono2' => 'TELEFONO2',
         'contacto' => 'CONTACTO', // "Atención" de la cotización si el pedido no trae contacto
         'fax' => 'FAX',
+        'cargo' => 'CARGO',
     ],
 
     // Columnas extra donde también se busca (alias "c").

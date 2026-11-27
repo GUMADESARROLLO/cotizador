@@ -2,6 +2,7 @@
 
 namespace App\Cotizaciones;
 
+use App\Catalogo\Lote;
 use App\Clientes\Cliente;
 use App\Models\Pedido;
 use App\Pedidos\Linea;
@@ -67,35 +68,68 @@ final class CotizacionExcel
      * @return array{licitacion:string, cliente:string, atencion:string, cargo:string, telefono:string, fax:string,
      *               fecha:Carbon, moneda:string, condicion:string, lineas:list<array{cantidad:float, descripcion:string, concentracion:string, precio:float, vence:?Carbon}>}
      */
-    public static function datos(Pedido $pedido, ?Cliente $cliente = null): array
+    /**
+     * @param  array<string, string>|null  $ficha  datos del cliente (ver FichaCotizacion); null = prellenados
+     * @param  array<string, list<Lote>>  $lotes  lotes en bodega por código (Lotes::porArticulos):
+     *                                            para la línea sin lote guardado se usa el sugerido
+     */
+    public static function datos(Pedido $pedido, ?Cliente $cliente = null, ?array $ficha = null, array $lotes = []): array
     {
+        $ficha ??= FichaCotizacion::prellenar($pedido, $cliente);
+
         $lineas = [];
         foreach ($pedido->items as $item) {
             $l = $item->comoLinea();
             // En la unidad en que se capturó: unidades internas (TBL, VIA…) o cajas.
             $enUnidades = ($l['modo'] ?? 'caja') === 'unidad' && Linea::tieneEmpaque($l);
+            // Lote: el guardado en la línea; si no hay (pedido sin enviar), el mismo que sugiere la
+            // pantalla del pedido: el elegido si sigue en bodega, si no el que vence primero.
+            $disponibles = $lotes[$item->codigo] ?? [];
+            $sugerido = collect($disponibles)->firstWhere('lote', $item->lote) ?? ($disponibles[0] ?? null);
+            $vence = $item->lote_vence ?: $sugerido?->vence;
             $lineas[] = [
                 'cantidad' => (float) ($enUnidades ? $l['unidades'] : $item->cantidad),
-                'descripcion' => mb_strtoupper(trim((string) $item->descripcion)), // como la plantilla
+                'descripcion' => self::descripcion((string) $item->descripcion),
                 'concentracion' => Concentracion::de((string) $item->descripcion),
                 'precio' => round((float) ($enUnidades ? Linea::precioUnidad($l) : $item->precio), 4),
-                'vence' => $item->lote_vence ? Carbon::parse($item->lote_vence) : null,
+                'vence' => $vence ? Carbon::parse($vence) : null,
+                'lote' => (string) ($item->lote ?: $sugerido?->lote),
             ];
         }
 
         return [
             'licitacion' => trim((string) $pedido->licitacion),
-            'cliente' => (string) $pedido->cliente,
-            'atencion' => trim((string) $pedido->contacto) !== '' ? trim((string) $pedido->contacto) : (string) $cliente?->contacto,
-            'cargo' => '', // a pedido del usuario: se llena a mano por ahora
-            // Un teléfono (como la plantilla): con dos más el fax, la línea se sale del recuadro.
-            'telefono' => trim((string) $cliente?->telefono1) ?: trim((string) $cliente?->telefono2),
-            'fax' => (string) $cliente?->fax,
+            'cliente' => trim((string) ($ficha['nombre'] ?? '')) ?: (string) $pedido->cliente,
+            'atencion' => trim((string) ($ficha['atencion'] ?? '')),
+            'cargo' => trim((string) ($ficha['cargo'] ?? '')),
+            'telefono' => trim((string) ($ficha['telefono'] ?? '')),
+            'fax' => trim((string) ($ficha['fax'] ?? '')),
+            'responsable' => trim((string) $pedido->responsable), // de cada cotización (pedido)
             'fecha' => Carbon::parse($pedido->fecha_pedido ?? $pedido->created_at),
             'moneda' => $pedido->moneda === 'D' ? 'D' : 'L',
-            'condicion' => self::condicion((string) $pedido->condicion_pago),
+            // La de Softland al día (la ficha del cliente); la guardada en el pedido, de respaldo.
+            'condicion' => self::condicion((string) ($cliente?->condicionPago ?: $pedido->condicion_pago)),
             'lineas' => $lineas,
         ];
+    }
+
+    /**
+     * Descripción como en la cotización: en mayúsculas y sin el laboratorio del final
+     * ("Meropenem 500 mg … Vial 10/Caja (Reyoung)" → "MEROPENEM 500 MG … VIAL 10/CAJA").
+     */
+    public static function descripcion(string $descripcion): string
+    {
+        $sin = preg_replace('/\s*\([^()]*\)\s*$/u', '', trim($descripcion));
+
+        return mb_strtoupper(trim($sin !== '' ? $sin : $descripcion));
+    }
+
+    /** Vencimiento como en la cotización: "feb-29". */
+    public static function vence(?Carbon $fecha): string
+    {
+        static $meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+        return $fecha ? $meses[$fecha->month - 1].'-'.$fecha->format('y') : '';
     }
 
     /** Condición de pago de Softland ("60", "180", "01" = contado) en palabras. */
@@ -159,7 +193,8 @@ final class CotizacionExcel
         $this->texto('A7', $tel, rico: true);
         $f = $d['fecha'];
         $this->texto('G4', sprintf(' Fecha: %d de %s %d', $f->day, self::MESES[$f->month - 1], $f->year));
-        $this->vaciar('G8');
+        // Línea verde bajo "Ref:" (responsable de la cotización); vacía si no se indicó.
+        ($d['responsable'] ?? '') !== '' ? $this->texto('G8', $d['responsable']) : $this->vaciar('G8');
 
         // ---- Moneda ----
         $simbolo = $d['moneda'] === 'D' ? 'US$' : 'C$';
@@ -174,6 +209,7 @@ final class CotizacionExcel
         // ---- Artículos ----
         $total = 0.0;
         $estiloPrecio4 = null; // precio por unidad con más de 2 decimales (1.4108): se muestran todos
+        $estiloVence = null;
         foreach ($lineas as $i => $l) {
             $r = self::FILA_ITEM + $i;
             $this->fila($r)->setAttribute('ht', (string) $altos[$i]);
@@ -192,7 +228,14 @@ final class CotizacionExcel
             $total += $sub;
             $this->formula("H{$r}", "B{$r}*G{$r}", $sub);
             $this->texto("I{$r}", $this->tiempoEntrega);
-            $l['vence'] ? $this->numero("J{$r}", self::serial($l['vence'])) : $this->vaciar("J{$r}");
+            if ($l['vence']) {
+                $this->numero("J{$r}", self::serial($l['vence']));
+                // "feb-29" en español aunque Excel esté en inglés (4C0A = español de Nicaragua).
+                $estiloVence ??= $this->clonarEstilo($zip, (int) $this->celda("J{$r}")->getAttribute('s'), [302, '[$-4C0A]mmm\-yy;@']);
+                $this->celda("J{$r}")->setAttribute('s', (string) $estiloVence);
+            } else {
+                $this->vaciar("J{$r}");
+            }
         }
         if ($lineas === []) {
             foreach (['A', 'B', 'C', 'F', 'G', 'H', 'I', 'J'] as $col) {
@@ -202,9 +245,8 @@ final class CotizacionExcel
         $this->formula('I'.$filaTotal, 'SUM(H11:H'.(12 + $delta).')', round($total, 2));
 
         // ---- Observaciones y firma ----
-        if ($d['condicion'] !== '') {
-            $this->texto('A'.(18 + $delta), '   *    Términos de pago: '.$d['condicion']);
-        }
+        // Siempre se reescribe: si no, quedaría el "Crédito 60 días" de la plantilla.
+        $this->texto('A'.(18 + $delta), rtrim('   *    Términos de pago: '.$d['condicion']));
         $this->texto('B'.(24 + $delta), $this->firma);
 
         $this->paginar($delta, count($lineas));

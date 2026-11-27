@@ -37,15 +37,29 @@ async function postJson(url, body) {
     return { res, data: await res.json() };
 }
 
-/* ---------- Aviso (HUD) ---------- */
-let toastTimer;
-function toast(message) {
-    const el = $('[data-toast]');
-    if (!el || !message) return;
-    el.textContent = message;
-    el.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (el.hidden = true), 2600);
+/* ---------- Avisos: todos con SweetAlert2 ----------
+ * toast(mensaje, icono): aviso breve arriba a la derecha (no bloquea).
+ * icono: 'error' (no se guardó / sin conexión), 'warning' (revisa algo), 'success', 'info'.
+ */
+const COLOR_ICONO = { error: '#c42b3a', warning: '#a34d00', success: '#1e9e57', info: '#29b6e8', question: '#29b6e8' };
+async function toast(message, icono = 'info') {
+    if (!message) return;
+    const Swal = await swal();
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: icono,
+        iconColor: COLOR_ICONO[icono] ?? COLOR_ICONO.info,
+        title: message,
+        showConfirmButton: false,
+        timer: icono === 'error' ? 4500 : 3000,
+        timerProgressBar: true,
+        customClass: { popup: 'swal-toast' },
+        didOpen: (el) => {
+            el.addEventListener('mouseenter', Swal.stopTimer);
+            el.addEventListener('mouseleave', Swal.resumeTimer);
+        },
+    });
 }
 
 /* Háptica breve solo en momentos con significado (límite alcanzado, error). */
@@ -104,7 +118,7 @@ function initSearch() {
             }
             results.innerHTML = await res.text();
         } catch (e) {
-            if (e.name !== 'AbortError') toast('No se pudo buscar. Revisa tu conexión.');
+            if (e.name !== 'AbortError') toast('No se pudo buscar. Revisa tu conexión.', 'error');
         } finally {
             results.setAttribute('aria-busy', 'false');
         }
@@ -256,7 +270,7 @@ function initListado() {
                 contadores();
                 document.dispatchEvent(new CustomEvent('listado:render', { detail: { root } }));
             } catch (e) {
-                if (e.name !== 'AbortError') toast('No se pudo cargar. Revisa tu conexión.');
+                if (e.name !== 'AbortError') toast('No se pudo cargar. Revisa tu conexión.', 'error');
             } finally {
                 if (controller === mio) results.setAttribute('aria-busy', 'false');
             }
@@ -423,7 +437,7 @@ function sync(st, value) {
                     return;
                 }
                 if (!res.ok) {
-                    toast(data.message ?? 'No se pudo actualizar el pedido.');
+                    toast(data.message ?? 'No se pudo actualizar el pedido.', 'error');
                     if (res.status === 404) removeRow(codigo);
                     return;
                 }
@@ -434,11 +448,11 @@ function sync(st, value) {
                 });
                 if (data.ajustado || data.excede) {
                     haptic();
-                    toast(data.message);
+                    toast(data.message, 'warning');
                 }
             } catch {
                 haptic();
-                toast('Sin conexión. El cambio no se guardó.');
+                toast('Sin conexión. El cambio no se guardó.', 'error');
             } finally {
                 inflight--;
             }
@@ -653,14 +667,14 @@ function initFecha() {
                 const { res, data } = await postJson('/pedido/fecha', { fecha: iso });
                 if (!res.ok) {
                     haptic();
-                    toast(data.errors?.fecha?.[0] ?? data.message ?? 'No se pudo cambiar la fecha.');
+                    toast(data.errors?.fecha?.[0] ?? data.message ?? 'No se pudo cambiar la fecha.', 'error');
                     return false;
                 }
                 trigger.dataset.fecha = data.fecha;
                 $('[data-fecha-texto]', trigger).textContent = data.corta;
                 return true;
             } catch {
-                toast('Sin conexión. La fecha no se cambió.');
+                toast('Sin conexión. La fecha no se cambió.', 'error');
                 return false;
             }
         },
@@ -889,13 +903,13 @@ function initEditor() {
 
     async function guardar(quitar = false) {
         const cantidad = quitar ? 0 : modo === 'unidad' ? Math.floor(numero(inUnidades.value)) : numero(inCajas.value);
-        if (!quitar && !(cantidad > 0)) return toast('Escribe la cantidad (o usa Quitar).');
+        if (!quitar && !(cantidad > 0)) return toast('Escribe la cantidad (o usa Quitar).', 'warning');
         const body = { codigo: a.codigo, cantidad, modo, lote };
         if (!quitar) {
             if (usarNivel) body.precio_nivel = true;
             else if (precioTocado) {
                 const p = por === 'unidad' ? numero(inPUnidad.value) : numero(inPCaja.value);
-                if (!(p > 0)) return toast('Escribe un precio mayor que cero.');
+                if (!(p > 0)) return toast('Escribe un precio mayor que cero.', 'warning');
                 Object.assign(body, { precio: p, por });
             }
         }
@@ -908,7 +922,7 @@ function initEditor() {
             if (res.status === 409) return void (location.href = '/clientes');
             if (!res.ok) {
                 haptic();
-                toast(data.errors ? Object.values(data.errors)[0][0] : data.message ?? 'No se pudo guardar.');
+                toast(data.errors ? Object.values(data.errors)[0][0] : data.message ?? 'No se pudo guardar.', 'error');
                 if (data.eliminado) {
                     h.cerrar();
                     removeRow(a.codigo);
@@ -923,10 +937,10 @@ function initEditor() {
             li.remove();
             if (data.ajustado || data.excede) {
                 haptic();
-                toast(data.message);
+                toast(data.message, 'warning');
             }
         } catch {
-            toast('Sin conexión. No se guardó el cambio.');
+            toast('Sin conexión. No se guardó el cambio.', 'error');
         } finally {
             inflight--;
             $$('button', form).forEach((b) => (b.disabled = false));
@@ -961,7 +975,7 @@ function initConsecutivo() {
             const { res, data } = await postJson('/pedido/consecutivo', { consecutivo: b.dataset.consecutivo });
             if (!res.ok) {
                 haptic();
-                toast(data.message ?? 'No se pudo cambiar el consecutivo.');
+                toast(data.message ?? 'No se pudo cambiar el consecutivo.', 'error');
                 return;
             }
             $$('[data-consecutivo]', sheet).forEach((x) => {
@@ -975,7 +989,7 @@ function initConsecutivo() {
             $('[data-consecutivo-texto]', trigger).textContent = data.consecutivo;
             h.cerrar();
         } catch {
-            toast('Sin conexión. El consecutivo no se cambió.');
+            toast('Sin conexión. El consecutivo no se cambió.', 'error');
         } finally {
             $$('[data-consecutivo]', sheet).forEach((x) => (x.disabled = false));
         }
@@ -1005,8 +1019,8 @@ initScrollEdge();
 initSearch();
 initListado();
 ordenarTablas();
-/* ---------- Envío a Softland con confirmación (SweetAlert2) ---------- */
-// Se carga bajo demanda: solo en la pantalla del pedido, no en cada página.
+/* ---------- SweetAlert2 (todas las alertas, avisos y confirmaciones) ---------- */
+// Se carga bajo demanda: la primera alerta lo descarga; las páginas sin alertas no lo cargan.
 async function swal() {
     const [{ default: Swal }] = await Promise.all([import('sweetalert2'), import('sweetalert2/dist/sweetalert2.min.css')]);
     return Swal.mixin({
@@ -1019,6 +1033,38 @@ async function swal() {
             cancelButton: 'swal-cancelar',
             actions: 'swal-acciones',
         },
+    });
+}
+
+/* Confirmaciones con SweetAlert2 (en lugar de confirm() del navegador):
+ * <form data-swal-confirm="¿Vaciar el pedido?" data-swal-texto="…" data-swal-boton="Sí, vaciar" [data-swal-peligro]>
+ */
+function initConfirmaciones() {
+    document.addEventListener('submit', async (e) => {
+        const form = e.target.closest?.('form[data-swal-confirm]');
+        if (!form || form.dataset.confirmado) return;
+        e.preventDefault();
+        const d = form.dataset;
+        const Swal = await swal();
+        const r = await Swal.fire({
+            icon: 'warning',
+            iconColor: COLOR_ICONO.warning,
+            title: d.swalConfirm,
+            text: d.swalTexto || undefined,
+            showCancelButton: true,
+            confirmButtonText: d.swalBoton || 'Sí, continuar',
+            cancelButtonText: 'Cancelar',
+            focusCancel: true,
+            customClass: {
+                popup: 'swal-unimark',
+                confirmButton: 'swalPeligro' in d ? 'swal-confirmar swal-peligro' : 'swal-confirmar',
+                cancelButton: 'swal-cancelar',
+                actions: 'swal-acciones',
+            },
+        });
+        if (!r.isConfirmed) return;
+        form.dataset.confirmado = '1';
+        form.submit();
     });
 }
 
@@ -1072,4 +1118,5 @@ initFiltroFechas();
 initConsecutivo();
 initConfirmForm();
 initSoftland();
-if (window.__aviso) toast(window.__aviso);
+initConfirmaciones();
+if (window.__aviso) toast(window.__aviso, 'warning');

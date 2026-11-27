@@ -13,7 +13,8 @@ class SqlServerLotes implements Lotes
     public function __construct(
         private ConnectionInterface $db,
         private string $esquema,
-        private string $bodega,
+        /** Una bodega (la del pedido) o varias (vencimiento de la cotización). */
+        private string|array $bodega,
         private string $estado = 'A',
     ) {}
 
@@ -32,7 +33,7 @@ class SqlServerLotes implements Lotes
                     $j->on('l.ARTICULO', '=', 'el.ARTICULO')->on('l.LOTE', '=', 'el.LOTE');
                 })
                 ->select(['el.ARTICULO as articulo', 'el.LOTE as lote', 'el.CANT_DISPONIBLE as disponible', 'l.FECHA_VENCIMIENTO as vence'])
-                ->where('el.BODEGA', $this->bodega)
+                ->whereIn('el.BODEGA', (array) $this->bodega)
                 ->where('el.CANT_DISPONIBLE', '>', 0)
                 ->where('l.ESTADO', $this->estado)
                 ->whereIn('el.ARTICULO', $bloque)

@@ -449,6 +449,89 @@
     }
 }
 
+/* Pedido en curso con la estructura del detalle: indicadores que se tocan y franja de confirmar. */
+@layer components {
+    .ped-pagina {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .kpi-btn {
+        width: 100%;
+        background: var(--color-paper);
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        transition: background-color 150ms ease, border-color 150ms ease;
+    }
+    .kpi-btn:hover {
+        border-color: #c9d3e6;
+        background: var(--color-hover);
+    }
+    .kpi-btn:focus-visible {
+        outline: 2px solid var(--color-royal);
+        outline-offset: 2px;
+    }
+    .kpi-accion {
+        display: inline-flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+    }
+    .kpi-accion svg {
+        color: var(--color-royal);
+    }
+    .ped-confirmar {
+        align-items: center;
+    }
+    .ped-confirmar-obs {
+        display: flex;
+        min-width: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .ped-confirmar-obs label {
+        margin: 0;
+    }
+    .ped-confirmar-obs textarea {
+        width: 100%;
+        min-height: 40px;
+        padding: 9px 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        font: 500 14px var(--font-sans);
+        resize: vertical;
+        outline: none;
+    }
+    .ped-confirmar-obs textarea:focus {
+        border-color: var(--color-royal);
+        box-shadow: 0 0 0 3px rgb(43 59 158 / 0.14);
+    }
+    .ped-confirmar-obs .hint {
+        margin: 0;
+        color: var(--color-ink-soft);
+        font-size: 12px;
+    }
+    .ped-confirmar .ped-confirm {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 200px;
+        align-self: center;
+    }
+    @media (max-width: 767.98px) {
+        .ped-confirmar {
+            flex-wrap: wrap;
+        }
+        .ped-confirmar .ped-confirm {
+            width: 100%;
+        }
+    }
+}
+
 /* Diálogo "Cotización en Excel" (detalle del pedido) */
 @layer components {
     .dlg {
@@ -457,7 +540,9 @@
         inset: 0;
         height: fit-content;
         margin: auto;
-        width: min(440px, calc(100% - 32px));
+        width: min(560px, calc(100% - 32px));
+        max-height: calc(100dvh - 32px);
+        overflow-y: auto;
         padding: 0;
         border: 1px solid var(--color-line);
         border-radius: 14px;
@@ -507,9 +592,376 @@
         color: var(--color-ink-soft);
         font-weight: 400;
     }
+    .dlg-grupo {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 12px;
+    }
+    .dlg-grupo legend {
+        padding: 0 6px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .dlg-grupo legend small,
+    .dlg-campo span small {
+        color: var(--color-ink-soft);
+        font-weight: 400;
+    }
+    .dlg-fila {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    @media (max-width: 480px) {
+        .dlg-fila {
+            grid-template-columns: 1fr;
+        }
+    }
     .dlg-acciones {
         display: flex;
         justify-content: flex-end;
         gap: 8px;
     }
 }
+
+/* Resumen arriba (detalle del pedido y pedido en curso): cliente · fecha · N.º Softland · total,
+   observaciones en una franja y la tabla a todo el ancho. */
+@layer components {
+    .ped-cabecera {
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) repeat(3, minmax(0, 1fr));
+        align-items: stretch;
+        gap: 16px;
+    }
+    .ped-cabecera > .card {
+        height: 100%;
+        margin: 0;
+    }
+    .ped-cabecera .kpi {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    @media (max-width: 1199.98px) {
+        .ped-cabecera {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .ped-cabecera > .card {
+            grid-column: 1 / -1;
+        }
+    }
+    @media (max-width: 639.98px) {
+        .ped-cabecera {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+    .ped-notas {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+    }
+    .ped-notas > svg {
+        flex: none;
+        margin-top: 2px;
+        color: var(--color-cyan-ink);
+    }
+    .ped-notas-texto {
+        margin: 2px 0 0;
+        color: var(--color-ink);
+        font-size: 15px;
+        font-weight: 600;
+        white-space: pre-line;
+    }
+    .ped-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        align-items: start;
+        gap: 16px;
+    }
+    .ped-info:not(:has(> :not(section:empty))) {
+        display: none;
+    }
+    .tbl-cot {
+        min-width: 860px;
+    }
+    /* Encabezados largos ("Precio Unitario C$", "Tiempo de Entrega") en dos renglones. */
+    .tbl.tbl-cot th {
+        white-space: normal;
+        vertical-align: bottom;
+    }
+    .tbl.tbl-cot th,
+    .tbl.tbl-cot td {
+        padding-inline: 12px;
+    }
+    .tbl-cot .cot-desc {
+        min-width: 240px;
+        max-width: 360px;
+        font-weight: 600;
+    }
+    .tbl-cot td.cot-c {
+        white-space: nowrap;
+    }
+}
+
+/* Diálogo "Cotización en Excel" (detalle del pedido) */
+@layer components {
+    .dlg {
+        /* Centrado: el reset de Tailwind quita el margin:auto nativo de <dialog>. */
+        position: fixed;
+        inset: 0;
+        height: fit-content;
+        margin: auto;
+        width: min(560px, calc(100% - 32px));
+        max-height: calc(100dvh - 32px);
+        overflow-y: auto;
+        padding: 0;
+        border: 1px solid var(--color-line);
+        border-radius: 14px;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        box-shadow: 0 24px 60px -20px rgb(21 32 79 / 0.45);
+    }
+    .dlg::backdrop {
+        background: rgb(21 32 79 / 0.4);
+    }
+    .dlg-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 22px;
+    }
+    .dlg-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .dlg-sub {
+        margin: -8px 0 0;
+        color: var(--color-ink-soft);
+        font-size: 13px;
+    }
+    .dlg-campo {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .dlg-campo input {
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        font: 500 15px var(--font-sans);
+        outline: none;
+    }
+    .dlg-campo input:focus {
+        border-color: var(--color-royal);
+        box-shadow: 0 0 0 3px rgb(43 59 158 / 0.14);
+    }
+    .dlg-campo small {
+        color: var(--color-ink-soft);
+        font-weight: 400;
+    }
+    .dlg-grupo {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 12px;
+    }
+    .dlg-grupo legend {
+        padding: 0 6px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .dlg-grupo legend small,
+    .dlg-campo span small {
+        color: var(--color-ink-soft);
+        font-weight: 400;
+    }
+    .dlg-fila {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    @media (max-width: 480px) {
+        .dlg-fila {
+            grid-template-columns: 1fr;
+        }
+    }
+    .dlg-acciones {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+}
+
+/* Detalle del pedido (solo lectura): misma estructura que /pedido. */
+@layer components {
+    div.ped-dato,
+    div.ped-dato:hover {
+        background: transparent;
+        cursor: default;
+    }
+    /* Observaciones guardadas: con el aspecto del campo de /pedido, sin poder editarse. */
+    .ped-obs-texto {
+        margin: 0;
+        padding: 10px 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        background: var(--color-mist);
+        color: var(--color-ink);
+        font-size: 14px;
+        font-weight: 600;
+        white-space: pre-line;
+    }
+    .ped-obs-texto.is-vacio {
+        color: var(--color-ink-soft);
+        font-weight: 400;
+    }
+}
+
+/* Diálogo "Cotización en Excel" (detalle del pedido) */
+@layer components {
+    .dlg {
+        /* Centrado: el reset de Tailwind quita el margin:auto nativo de <dialog>. */
+        position: fixed;
+        inset: 0;
+        height: fit-content;
+        margin: auto;
+        width: min(560px, calc(100% - 32px));
+        max-height: calc(100dvh - 32px);
+        overflow-y: auto;
+        padding: 0;
+        border: 1px solid var(--color-line);
+        border-radius: 14px;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        box-shadow: 0 24px 60px -20px rgb(21 32 79 / 0.45);
+    }
+    .dlg::backdrop {
+        background: rgb(21 32 79 / 0.4);
+    }
+    .dlg-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 22px;
+    }
+    .dlg-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .dlg-sub {
+        margin: -8px 0 0;
+        color: var(--color-ink-soft);
+        font-size: 13px;
+    }
+    .dlg-campo {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .dlg-campo input {
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        font: 500 15px var(--font-sans);
+        outline: none;
+    }
+    .dlg-campo input:focus {
+        border-color: var(--color-royal);
+        box-shadow: 0 0 0 3px rgb(43 59 158 / 0.14);
+    }
+    .dlg-campo small {
+        color: var(--color-ink-soft);
+        font-weight: 400;
+    }
+    .dlg-grupo {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--color-border-soft);
+        border-radius: 12px;
+    }
+    .dlg-grupo legend {
+        padding: 0 6px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .dlg-grupo legend small,
+    .dlg-campo span small {
+        color: var(--color-ink-soft);
+        font-weight: 400;
+    }
+    .dlg-fila {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    @media (max-width: 480px) {
+        .dlg-fila {
+            grid-template-columns: 1fr;
+        }
+    }
+    .dlg-acciones {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+}
+
+/* Detalle del pedido (solo lectura): misma estructura que /pedido. */
+@layer components {
+    .ped-dato {
+        cursor: default;
+    }
+    .ped-moneda {
+        margin: 6px 0 0;
+        color: var(--color-ink-soft);
+        font-size: 12.5px;
+        text-align: right;
+    }
+    .ped-obs {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid var(--color-border-soft);
+    }
+    .ped-obs-label {
+        margin: 0;
+        color: var(--color-ink-soft);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .ped-obs-texto {
+        margin: 0;
+        padding: 10px 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        background: var(--color-mist);
+        color: var(--color-ink);
+        font-size: 14px;
+        font-weight: 600;
+        white-space: pre-line;
+    }
+}
+

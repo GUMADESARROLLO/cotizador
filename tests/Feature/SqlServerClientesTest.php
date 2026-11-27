@@ -18,7 +18,7 @@ class SqlServerClientesTest extends TestCase
         parent::setUp();
 
         Schema::create('cliente', function ($t) {
-            foreach (['CLIENTE', 'NOMBRE', 'ALIAS', 'DIRECCION', 'VENDEDOR', 'ACTIVO', 'MOROSO', 'TELEFONO1', 'TELEFONO2', 'CONTACTO', 'FAX'] as $c) {
+            foreach (['CLIENTE', 'NOMBRE', 'ALIAS', 'DIRECCION', 'VENDEDOR', 'ACTIVO', 'MOROSO', 'TELEFONO1', 'TELEFONO2', 'CONTACTO', 'FAX', 'CARGO'] as $c) {
                 $t->string($c)->nullable();
             }
             $t->string('CONDICION_PAGO')->default('180');

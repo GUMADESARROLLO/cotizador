@@ -133,10 +133,6 @@
         </div>
     </nav>
 
-    {{-- Aviso (HUD) --}}
-    <div data-toast role="status" aria-live="polite" hidden
-         class="toast text-ink fixed left-1/2 z-[1100] max-w-[calc(100%-2rem)] -translate-x-1/2 rounded-2xl bg-white px-4 py-3 text-sub font-semibold shadow-[0_0_0_2px_var(--color-cyan),0_24px_50px_-18px_rgb(41_182_232/0.85)]"
-         style="top: calc(env(safe-area-inset-top) + 4rem)"></div>
 
     @if (session('aviso'))
         <script>window.__aviso = @json(session('aviso'));</script>

@@ -19,6 +19,10 @@ return [
     // Vacía = "Lic. " + clientes.vendedor_nombre.
     'firma' => env('COTIZACION_FIRMA'),
 
+    // Fecha de vencimiento de las líneas sin lote guardado: el lote que vence primero con
+    // existencia en estas bodegas (las del inventario del Reorder Point; sin la 004).
+    'bodegas_vence' => array_filter(explode(',', (string) env('COTIZACION_BODEGAS_VENCE', '006,002,005'))),
+
     // Columna "Tiempo de Entrega" de cada artículo.
     'tiempo_entrega' => env('COTIZACION_TIEMPO_ENTREGA', 'INMEDIATO'),
 

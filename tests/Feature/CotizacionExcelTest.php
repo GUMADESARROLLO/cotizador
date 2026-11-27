@@ -6,6 +6,7 @@ use App\Clientes\Clientes;
 use App\Clientes\DemoClientes;
 use App\Cotizaciones\Concentracion;
 use App\Cotizaciones\CotizacionExcel;
+use App\Cotizaciones\FichaCotizacion;
 use App\Models\Pedido;
 use DOMDocument;
 use DOMXPath;
@@ -192,7 +193,9 @@ class CotizacionExcelTest extends TestCase
         $d = CotizacionExcel::datos($p->load('items'), $cliente);
 
         $this->assertSame('L-1', $d['licitacion']);
-        $this->assertSame('Contado', $d['condicion']);
+        // Manda la condición de Softland al día (180); la del pedido ("01" = contado) es respaldo.
+        $this->assertSame('Crédito 180 días', $d['condicion']);
+        $this->assertSame('Contado', CotizacionExcel::datos($p, null)['condicion']);
         $this->assertSame(10000.0, $d['lineas'][0]['cantidad']); // capturado en unidades
         $this->assertEqualsWithDelta(1.4108, $d['lineas'][0]['precio'], 0.00001);
         $this->assertSame('AMOXICILINA 500MG CAPSULA 100/CAJA', $d['lineas'][0]['descripcion']);
@@ -200,6 +203,74 @@ class CotizacionExcelTest extends TestCase
         $this->assertSame(3.0, $d['lineas'][1]['cantidad']); // en cajas
         $this->assertSame('2270-00005', $d['telefono']);
         $this->assertSame('Crédito 180 días', CotizacionExcel::condicion('180'));
+    }
+
+    public function test_sin_condicion_de_pago_no_queda_el_60_de_la_plantilla(): void
+    {
+        $f = $this->generar($this->datos([$this->linea('ANASTROZOL 1 MG', 1, 10)], ['condicion' => '']));
+        [$h, , $zip] = $this->abrir($f);
+
+        $this->assertSame('   *    Términos de pago:', $this->valor($h, 'A18'));
+        $zip->close();
+        unlink($f);
+    }
+
+    public function test_linea_verde_con_el_responsable(): void
+    {
+        $f = $this->generar($this->datos([$this->linea('ANASTROZOL 1 MG', 1, 10)], ['responsable' => 'Lic. Fabiola Guerreri Molina']));
+        [$h, , $zip] = $this->abrir($f);
+
+        $this->assertSame('Lic. Fabiola Guerreri Molina', $this->valor($h, 'G8'));
+        $zip->close();
+        unlink($f);
+    }
+
+    public function test_la_ficha_del_cliente_se_recuerda_entre_pedidos(): void
+    {
+        $this->app->instance(Clientes::class, new DemoClientes);
+        $nuevo = function () {
+            $p = Pedido::create(['cliente' => 'FARMACIA LOPEZ', 'cliente_codigo' => '00005', 'moneda' => 'L', 'lineas' => 1, 'piezas' => 1, 'total' => 10]);
+            $p->items()->create(['codigo' => 'A1', 'descripcion' => 'Anastrozol 1 mg', 'unidad' => 'CJA', 'precio' => 10, 'cantidad' => 1, 'existencia' => 0, 'subtotal' => 10]);
+
+            return $p;
+        };
+
+        // Primera vez: se prellena con Softland (teléfono del cliente) y el nombre del pedido.
+        $p1 = $nuevo();
+        $this->get(route('pedidos.show', $p1))->assertOk()
+            ->assertSee('name="nombre" value="FARMACIA LOPEZ"', false)
+            ->assertSee('name="telefono" value="2270-00005"', false);
+
+        $this->post(route('pedidos.cotizacion', $p1), [
+            'licitacion' => 'CA-173-11-2026', 'nombre' => 'Farmacia López', 'atencion' => 'Lic. Oscar Estrada',
+            'cargo' => 'Gerente General', 'telefono' => '2249-9191', 'fax' => '2249-0899', 'responsable' => 'Lic. Fabiola Guerreri Molina',
+        ])->assertOk();
+
+        // Otro pedido del mismo cliente: ya viene todo lleno (lo guardado manda sobre Softland).
+        $p2 = $nuevo();
+        $this->get(route('pedidos.show', $p2))
+            ->assertSee('name="nombre" value="Farmacia López"', false)
+            ->assertSee('name="atencion" value="Lic. Oscar Estrada"', false)
+            ->assertSee('name="cargo" value="Gerente General"', false)
+            ->assertSee('name="telefono" value="2249-9191"', false)
+            ->assertSee('name="fax" value="2249-0899"', false)
+            // Licitación y responsable son de cada cotización: vacíos, con el responsable anterior como sugerencia.
+            ->assertSee('name="licitacion" value=""', false)
+            ->assertSee('name="responsable" value=""', false)
+            ->assertSee('<option value="Lic. Fabiola Guerreri Molina">', false);
+
+        // El pedido 1 conserva su responsable; el 2 lleva otro sin pisar al anterior.
+        $this->assertSame('Lic. Fabiola Guerreri Molina', $p1->fresh()->responsable);
+        $this->post(route('pedidos.cotizacion', $p2), ['licitacion' => 'CA-180-11-2026', 'responsable' => 'Lic. Fátima Putoy'] + [
+            'nombre' => 'Farmacia López', 'atencion' => 'Lic. Oscar Estrada', 'cargo' => 'Gerente General', 'telefono' => '2249-9191', 'fax' => '2249-0899',
+        ])->assertOk();
+        $this->assertSame(['Lic. Fabiola Guerreri Molina', 'Lic. Fátima Putoy'], [$p1->fresh()->responsable, $p2->fresh()->responsable]);
+
+        $d = CotizacionExcel::datos($p2->fresh()->load('items'), (new DemoClientes)->encontrar('00005'));
+        $this->assertSame(['Farmacia López', 'Lic. Oscar Estrada', 'Gerente General', '2249-9191', '2249-0899', 'Lic. Fátima Putoy'],
+            [$d['cliente'], $d['atencion'], $d['cargo'], $d['telefono'], $d['fax'], $d['responsable']]);
+        // Sugerencias: las dos, la más reciente primero.
+        $this->assertSame(['Lic. Fátima Putoy', 'Lic. Fabiola Guerreri Molina'], FichaCotizacion::responsables($nuevo()));
     }
 
     public function test_el_detalle_descarga_el_excel_y_guarda_la_licitacion(): void

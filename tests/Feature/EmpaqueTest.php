@@ -127,7 +127,8 @@ class EmpaqueTest extends TestCase
         $this->assertSame([56.0, 2800.0, 'unidad', 50.0, 'VIA', 1646.5, true], [$i->cantidad, $i->unidades, $i->modo, $i->factor, $i->unidad_empaque, $i->precio, $i->precio_manual]);
         $this->assertSame(92204.0, $p->total);
 
-        $this->get(route('pedidos.show', $p))->assertSee('2,800 VIA')->assertSee('C$32.93')->assertDontSee('Precio manual');
+        // Detalle con el formato de la cotización: cantidad y precio en la unidad capturada (VIA).
+        $this->get(route('pedidos.show', $p))->assertSeeInOrder(['2,800', '32.93', '92,204.00'])->assertDontSee('Precio manual');
 
         // Al modificar, vuelve en unidades y con su precio manual (sin marcarlo como "cambió").
         $this->post(route('pedidos.editar', $p))->assertSessionHas('ajustados', []);

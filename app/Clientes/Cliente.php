@@ -24,6 +24,7 @@ final readonly class Cliente
         // Para la cotización en Excel ("Atención" y "Fax").
         public string $contacto = '',
         public string $fax = '',
+        public string $cargo = '',
     ) {}
 
     /**
@@ -60,6 +61,7 @@ final readonly class Cliente
             telefono2: trim((string) ($row->telefono2 ?? '')),
             contacto: trim((string) ($row->contacto ?? '')),
             fax: trim((string) ($row->fax ?? '')),
+            cargo: trim((string) ($row->cargo ?? '')),
         );
     }
 

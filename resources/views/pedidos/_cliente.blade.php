@@ -2,16 +2,11 @@
     /** @var \App\Clientes\Cliente $cliente */
     $total ??= null;
     $cambiar ??= true;
-    $palabras = preg_split('/\s+/', trim($cliente->nombre), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-    if (($palabras[0] ?? '') !== '' && str_starts_with(mb_strtoupper($palabras[0]), 'FARM') && count($palabras) > 1) {
-        array_shift($palabras);
-    }
-    $iniciales = mb_strtoupper(mb_substr($palabras[0] ?? '', 0, 1).mb_substr($palabras[1] ?? '', 0, 1));
 @endphp
 {{-- Cliente del pedido (en curso o guardado). El aviso de crédito lo muestra u oculta el JS al cambiar el total. --}}
 <section class="card" aria-label="Cliente del pedido">
     <div class="ped-cliente">
-        <span class="avatar" aria-hidden="true">{{ $iniciales }}<span class="avatar-dot {{ $cliente->moroso ? 'is-bad' : 'is-ok' }}"></span></span>
+        {{-- Sin avatar de iniciales: si es moroso lo indica la etiqueta "Moroso". --}}
         <div class="ped-cliente-body">
             <p class="eyebrow">Cliente del pedido</p>
             <p class="ped-cliente-nombre">{{ $cliente->nombre }}</p>
