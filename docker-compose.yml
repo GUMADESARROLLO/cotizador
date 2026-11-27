@@ -1,5 +1,3 @@
-version: "3"
-
 services:
   cotizador:
     container_name: cn_cotizador
@@ -24,3 +22,14 @@ services:
       - NGINX_FASTCGI_READ_TIMEOUT=60s
       - NGINX_FASTCGI_BUFFERS=8 8k
       - NGINX_FASTCGI_BUFFER_SIZE=16k
+
+  # Compila el CSS/JS (Vite) en public/build. No queda corriendo: se usa a demanda en cada despliegue
+  #   docker compose run --rm assets
+  # (public/build está en .gitignore; la imagen de PHP no trae Node).
+  assets:
+    image: node:22-alpine
+    profiles: ["build"]
+    working_dir: /app
+    volumes:
+      - "./:/app"
+    command: sh -c "npm ci --no-audit --no-fund && npm run build"
