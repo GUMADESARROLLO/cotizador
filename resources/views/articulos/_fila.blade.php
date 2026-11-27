@@ -16,6 +16,9 @@
                 <span class="num text-[15px] font-bold">{{ $a->codigo }}</span>
                 <span aria-hidden="true">·</span>
                 <x-existencia :existencia="$a->existencia" :unidad="$a->unidad" :factor="$a->factor" :unidad-empaque="$a->unidadEmpaque" />
+                @if (($reorden ?? null) !== null)
+                    <x-reorden :datos="$reorden" :fecha="$reordenFecha ?? null" />
+                @endif
             </p>
         </div>
     </div>

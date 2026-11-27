@@ -7,6 +7,7 @@ use App\Catalogo\DemoCatalogo;
 use App\Catalogo\DemoLotes;
 use App\Catalogo\Imagenes;
 use App\Catalogo\Lotes;
+use App\Catalogo\Reorden;
 use App\Catalogo\SqlServerCatalogo;
 use App\Catalogo\SqlServerLotes;
 use App\Clientes\Clientes;
@@ -100,6 +101,15 @@ class AppServiceProvider extends ServiceProvider
             config: config('articulos.imagenes'),
             carpeta: public_path('thumbs'),
             urlBase: '/thumbs',
+        ));
+
+        // scoped: memoriza el mapa solo durante la petición.
+        $this->app->scoped(Reorden::class, fn ($app) => new Reorden(
+            cache: $app['cache.store'],
+            db: $app['db'],
+            // Con el catálogo de ejemplo no hay SQL Server que consultar.
+            config: ['habilitado' => config('articulos.reorden.habilitado') && config('articulos.driver') !== 'demo']
+                + config('articulos.reorden'),
         ));
     }
 

@@ -128,6 +128,23 @@ return [
             'trust_server_certificate' => env('DB_SQL_TRUST_SERVER_CERTIFICATE', 'true'),
         ],
 
+        // SQL Server de GUMA@NET (Reorder Point). Si no se configura, usa el del catálogo.
+        'sqlsrv_reorder' => [
+            'driver' => 'sqlsrv',
+            'host' => env('DB_REORDER_HOST', env('DB_SQL_HOST', 'localhost')),
+            'port' => env('DB_REORDER_PORT', env('DB_SQL_PORT', '1433')),
+            'database' => env('DB_REORDER_DATABASE', 'PRODUCCION'),
+            'username' => env('DB_REORDER_USERNAME', env('DB_SQL_USERNAME', '')),
+            'password' => env('DB_REORDER_PASSWORD', env('DB_SQL_PASSWORD', '')),
+            'charset' => env('DB_SQL_CHARSET', 'utf8'),
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'encrypt' => env('DB_REORDER_ENCRYPT', env('DB_SQL_ENCRYPT', 'yes')),
+            'trust_server_certificate' => env('DB_REORDER_TRUST_SERVER_CERTIFICATE', env('DB_SQL_TRUST_SERVER_CERTIFICATE', 'true')),
+            // La función tarda ~8 s: margen amplio (solo corre en segundo plano).
+            'options' => defined('PDO::SQLSRV_ATTR_QUERY_TIMEOUT') ? [PDO::SQLSRV_ATTR_QUERY_TIMEOUT => 60] : [],
+        ],
+
     ],
 
     /*

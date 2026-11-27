@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Catalogo\Catalogo;
 use App\Catalogo\Imagenes;
+use App\Catalogo\Reorden;
 use App\Pedidos\Carrito;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class ArticuloController extends Controller
     }
 
     /** Devuelve el fragmento HTML de resultados (se carga con fetch). */
-    public function buscar(Request $request, Catalogo $catalogo, Carrito $carrito, Imagenes $imagenes)
+    public function buscar(Request $request, Catalogo $catalogo, Carrito $carrito, Imagenes $imagenes, Reorden $reorden)
     {
         $q = trim((string) $request->query('q', ''));
         $error = false;
@@ -36,11 +37,17 @@ class ArticuloController extends Controller
             }
         }
 
+        $codigos = array_map(fn ($a) => $a->codigo, $articulos);
+
         return view('articulos._resultados', [
             'q' => $q,
             'articulos' => $articulos,
             'error' => $error,
-            'imagenes' => $imagenes->urls(array_map(fn ($a) => $a->codigo, $articulos)),
+            'imagenes' => $imagenes->urls($codigos),
+            // Mapa en caché: no consulta SQL Server (ver App\Catalogo\Reorden).
+            'reorden' => $codigos ? $reorden->para($codigos) : [],
+            'reordenCargado' => $codigos && $reorden->cargado(),
+            'reordenFecha' => $codigos ? $reorden->fechaCategoria() : null,
             'enCarrito' => $carrito->items(),
         ]);
     }

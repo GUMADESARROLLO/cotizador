@@ -99,6 +99,27 @@ return [
         'miniatura_calidad' => 80,
     ],
 
+    /*
+    | Reorder Point de GUMA@NET: categoría (A, B, C, L; sufijo CA = Cruz Azul) y
+    | meses de inventario (inventario 002+005+006 / promedio mensual privado).
+    | Sale de PRODUCCION.dbo.fn_reorder_meses_inventario(@CORTE) en el SQL Server
+    | de GUMA@NET (192.168.1.18), distinto al del catálogo: conexión propia.
+    | Tarda ~8 s, así que se cachea completo y se refresca en segundo plano
+    | (ver App\Catalogo\Reorden); la búsqueda nunca la espera.
+    |
+    | fecha_corte: vacía = hoy (usa la última foto de categorías <= hoy). Se fija
+    | cuando la última foto no es confiable (la del 24-nov-2026 está incompleta;
+    | la validada es la del 26-oct-2026). El inventario siempre es el actual.
+    */
+    'reorden' => [
+        'habilitado' => (bool) env('REORDER_ENABLED', true),
+        'connection' => env('REORDER_CONNECTION', 'sqlsrv_reorder'),
+        'funcion' => env('REORDER_FUNCION', 'PRODUCCION.dbo.fn_reorder_meses_inventario'),
+        'fecha_corte' => env('REORDER_FECHA_CORTE'),
+        'refrescar_minutos' => (int) env('REORDER_REFRESCAR_MINUTOS', 120),
+        'reintento_minutos' => (int) env('REORDER_REINTENTO_MINUTOS', 10),
+    ],
+
     'currency' => 'C$',
 
 ];

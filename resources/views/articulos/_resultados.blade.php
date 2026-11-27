@@ -17,7 +17,7 @@
     <p class="section-label">{{ count($articulos) }} resultado(s)</p>
     <ul class="group-list animate-card-in">
         @foreach ($articulos as $a)
-            @include('articulos._fila', ['a' => $a, 'item' => $enCarrito[$a->codigo] ?? null, 'imagen' => $imagenes[$a->codigo] ?? null, 'prioridad' => $loop->index < 4])
+            @include('articulos._fila', ['a' => $a, 'item' => $enCarrito[$a->codigo] ?? null, 'imagen' => $imagenes[$a->codigo] ?? null, 'prioridad' => $loop->index < 4, 'reorden' => $reordenCargado ? ($reorden[$a->codigo] ?? []) : null, 'reordenFecha' => $reordenFecha])
         @endforeach
     </ul>
 @endif
