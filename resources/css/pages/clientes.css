@@ -55,13 +55,8 @@
     }
     .cli-cell {
         /* Angosta para que la tabla completa (con teléfonos) quepa a 1440px. */
-        min-width: 240px;
-        max-width: 300px;
-    }
-    .tbl-clientes th:first-child,
-    .tbl-clientes td:first-child {
-        width: 1%;
-        padding-right: 4px;
+        min-width: 260px;
+        max-width: 340px;
     }
     .cli-pick {
         display: inline-flex;

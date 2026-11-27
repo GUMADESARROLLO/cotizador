@@ -1,13 +1,4 @@
 @php
-    // Iniciales del avatar; si el nombre empieza por FARM… se salta esa palabra.
-    $iniciales = function (string $nombre): string {
-        $p = preg_split('/\s+/', trim($nombre), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        if (count($p) > 1 && str_starts_with(mb_strtoupper($p[0]), 'FARM')) {
-            array_shift($p);
-        }
-
-        return mb_strtoupper(mb_substr($p[0] ?? '', 0, 1).mb_substr($p[1] ?? '', 0, 1));
-    };
     $desde = $total ? ($pagina - 1) * $per + 1 : 0;
     $hasta = $desde ? $desde + count($clientes) - 1 : 0;
     $ini = max(1, min($pagina - 2, $paginas - 4));
@@ -36,7 +27,6 @@
         <table class="tbl tbl-clientes">
             <thead>
                 <tr>
-                    <th scope="col"><span class="sr-only">Estado</span></th>
                     <x-th-orden campo="cliente" :orden="$orden ?? null">Cliente</x-th-orden>
                     <x-th-orden campo="nivel" :orden="$orden ?? null">Nivel de precio</x-th-orden>
                     <x-th-orden campo="limite" :orden="$orden ?? null" class="th-num">Límite</x-th-orden>
@@ -49,9 +39,6 @@
             <tbody>
                 @foreach ($clientes as $c)
                     <tr @class(['row-bad' => $c->moroso, 'is-actual' => $actual === $c->codigo])>
-                        <td>
-                            <span class="avatar" aria-hidden="true">{{ $iniciales($c->nombre) }}<i class="avatar-dot {{ $c->moroso ? 'is-bad' : 'is-ok' }}"></i></span>
-                        </td>
                         <td class="cli-cell">
                             {{-- Único control de la fila: un botón real (teclado nativo); el click en cualquier parte de la fila lo activa (clientes.js). --}}
                             <button type="submit" form="form-elegir-cliente" name="codigo" value="{{ $c->codigo }}" class="cli-pick">
