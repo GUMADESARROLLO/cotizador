@@ -93,3 +93,181 @@ function initObservaciones() {
 }
 
 initObservaciones();
+
+// Adjuntos de un pedido ingresado en Softland: modal con zona para soltar archivos y tabla.
+function initAdjuntos() {
+    const dlg = document.querySelector('[data-adjuntos-dlg]');
+    const abrir = document.querySelector('[data-adjuntos-abrir]');
+    if (!dlg || !abrir) return;
+
+    const $ = (sel) => dlg.querySelector(sel);
+    const drop = $('[data-adjuntos-drop]');
+    const input = $('[data-adjuntos-input]');
+    const filas = $('[data-adjuntos-filas]');
+    const buscar = $('[data-adjuntos-buscar]');
+    const progreso = $('[data-adjuntos-progreso]');
+    const barra = $('[data-adjuntos-barra]');
+    const estado = $('[data-adjuntos-estado]');
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+    const maxBytes = Number(dlg.dataset.maxKb) * 1024;
+    const extensiones = dlg.dataset.extensiones.split(',');
+    let datos = [];
+    let subiendo = false;
+
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const peso = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+    const swal = async () => {
+        const [{ default: Swal }] = await Promise.all([import('sweetalert2'), import('sweetalert2/dist/sweetalert2.min.css')]);
+        return Swal.mixin({
+            buttonsStyling: false,
+            reverseButtons: true,
+            target: dlg, // dentro del <dialog> (si no, queda detrás del modal)
+            customClass: { popup: 'swal-unimark', confirmButton: 'swal-confirmar', cancelButton: 'swal-cancelar', actions: 'swal-acciones' },
+        });
+    };
+    const aviso = async (titulo, icono = 'error') => {
+        const Swal = await swal();
+        Swal.fire({ toast: true, position: 'top-end', icon: icono, title: titulo, showConfirmButton: false, timer: icono === 'error' ? 4500 : 2500, timerProgressBar: true, customClass: { popup: 'swal-toast' } });
+    };
+
+    const pintar = () => {
+        const q = buscar.value.trim().toLowerCase();
+        const lista = datos.filter((a) => !q || a.nombre.toLowerCase().includes(q));
+        filas.innerHTML = lista
+            .map(
+                (a) => `<tr>
+                    <td data-v="${esc(a.nombre)}"><a class="adj-nombre" href="${esc(a.descargar)}" title="Descargar">${esc(a.nombre)}</a></td>
+                    <td><span class="tag tag-neutral">${esc(a.extension || '—')}</span></td>
+                    <td class="td-num" data-v="${a.tamano}">${peso(a.tamano)}</td>
+                    <td data-v="${esc(a.fecha_orden)}">${esc(a.fecha)}</td>
+                    <td class="adj-acciones">
+                        <a class="icon-btn" href="${esc(a.descargar)}" aria-label="Descargar ${esc(a.nombre)}" title="Descargar">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></svg>
+                        </a>
+                        <button type="button" class="icon-btn adj-borrar" data-eliminar="${esc(a.eliminar)}" data-nombre="${esc(a.nombre)}" aria-label="Eliminar ${esc(a.nombre)}" title="Eliminar">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                        </button>
+                    </td>
+                </tr>`,
+            )
+            .join('');
+        $('[data-adjuntos-total]').textContent = datos.length;
+        $('[data-adjuntos-vacio]').hidden = datos.length > 0;
+        $('[data-adjuntos-vacio]').textContent = datos.length ? '' : 'Aún no hay documentos adjuntos.';
+        if (datos.length && !lista.length) filas.innerHTML = `<tr><td colspan="5" class="adj-sin">Ningún archivo coincide con “${esc(buscar.value)}”.</td></tr>`;
+        const n = document.querySelector('[data-adjuntos-n]');
+        if (n) {
+            n.textContent = datos.length;
+            n.hidden = datos.length === 0;
+        }
+    };
+
+    const cargar = async () => {
+        filas.innerHTML = '<tr><td colspan="5" class="adj-sin">Cargando…</td></tr>';
+        try {
+            const r = await fetch(dlg.dataset.listar, { headers: { Accept: 'application/json' } });
+            datos = (await r.json()).adjuntos ?? [];
+        } catch {
+            aviso('No se pudieron cargar los adjuntos.');
+        }
+        pintar();
+    };
+
+    // Sube con XMLHttpRequest para mostrar el avance.
+    const subir = (archivos) => {
+        if (subiendo || !archivos.length) return;
+        const malos = archivos.filter((f) => !extensiones.includes(f.name.split('.').pop().toLowerCase()) || f.size > maxBytes);
+        if (malos.length) {
+            aviso(`${malos.length === 1 ? `"${malos[0].name}"` : `${malos.length} archivos`}: tipo no permitido o pasa de ${Math.round(maxBytes / 1048576)} MB.`, 'warning');
+            archivos = archivos.filter((f) => !malos.includes(f));
+            if (!archivos.length) return;
+        }
+        const fd = new FormData();
+        archivos.forEach((f) => fd.append('archivos[]', f));
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', dlg.dataset.subir);
+        xhr.setRequestHeader('X-CSRF-TOKEN', csrf);
+        xhr.setRequestHeader('Accept', 'application/json');
+        subiendo = true;
+        drop.classList.add('is-ocupado');
+        progreso.hidden = false;
+        barra.style.width = '0%';
+        estado.textContent = `Subiendo ${archivos.length} archivo(s)…`;
+        xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) barra.style.width = `${Math.round((e.loaded / e.total) * 100)}%`;
+        };
+        xhr.onload = () => {
+            let r = {};
+            try {
+                r = JSON.parse(xhr.responseText);
+            } catch {}
+            if (r.adjuntos) datos = r.adjuntos;
+            pintar();
+            if (xhr.status >= 200 && xhr.status < 300) aviso(r.message ?? 'Listo.', 'success');
+            else aviso(r.errors ? Object.values(r.errors)[0][0] : (r.message ?? 'No se pudo subir.'));
+        };
+        xhr.onerror = () => aviso('Sin conexión. No se subieron los archivos.');
+        xhr.onloadend = () => {
+            subiendo = false;
+            drop.classList.remove('is-ocupado');
+            progreso.hidden = true;
+            input.value = '';
+        };
+        xhr.send(fd);
+    };
+
+    abrir.addEventListener('click', () => {
+        dlg.showModal();
+        cargar();
+    });
+    $('[data-adjuntos-cerrar]').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => e.target === dlg && !subiendo && dlg.close()); // clic fuera
+    input.addEventListener('change', () => subir([...input.files]));
+    buscar.addEventListener('input', pintar);
+
+    ['dragenter', 'dragover'].forEach((t) =>
+        drop.addEventListener(t, (e) => {
+            e.preventDefault();
+            drop.classList.add('is-encima');
+        }),
+    );
+    ['dragleave', 'drop'].forEach((t) =>
+        drop.addEventListener(t, (e) => {
+            e.preventDefault();
+            drop.classList.remove('is-encima');
+        }),
+    );
+    drop.addEventListener('drop', (e) => subir([...(e.dataTransfer?.files ?? [])]));
+    // Soltar fuera de la zona no debe abrir el archivo en el navegador.
+    dlg.addEventListener('dragover', (e) => e.preventDefault());
+    dlg.addEventListener('drop', (e) => e.preventDefault());
+
+    filas.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-eliminar]');
+        if (!btn) return;
+        const Swal = await swal();
+        const r = await Swal.fire({
+            icon: 'warning',
+            iconColor: '#a34d00',
+            title: '¿Eliminar el adjunto?',
+            text: btn.dataset.nombre,
+            showCancelButton: true,
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar',
+            focusCancel: true,
+            customClass: { popup: 'swal-unimark', confirmButton: 'swal-confirmar swal-peligro', cancelButton: 'swal-cancelar', actions: 'swal-acciones' },
+        });
+        if (!r.isConfirmed) return;
+        try {
+            const res = await fetch(btn.dataset.eliminar, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': csrf, Accept: 'application/json' } });
+            const d = await res.json();
+            if (d.adjuntos) datos = d.adjuntos;
+            pintar();
+            aviso(d.message ?? 'Eliminado.', res.ok ? 'success' : 'error');
+        } catch {
+            aviso('Sin conexión. No se eliminó.');
+        }
+    });
+}
+
+initAdjuntos();

@@ -27,6 +27,12 @@ class Pedido extends Model
         ];
     }
 
+    /** Documentos adjuntos (solo cuando ya está en Softland), el más reciente primero. */
+    public function adjuntos(): HasMany
+    {
+        return $this->hasMany(PedidoAdjunto::class)->latest('id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(PedidoItem::class);

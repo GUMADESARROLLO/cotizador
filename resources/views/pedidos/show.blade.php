@@ -11,6 +11,14 @@
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m8 13 4 5M12 13l-4 5"/></svg>
             Cotización Excel
         </button>
+        {{-- Adjuntar documentos: solo cuando el pedido ya está ingresado en Softland. --}}
+        @if ($pedido->enviadoASoftland())
+            <button type="button" class="btn btn-line" data-adjuntos-abrir>
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                Adjuntar
+                @if ($pedido->adjuntos_count)<span class="btn-n" data-adjuntos-n>{{ $pedido->adjuntos_count }}</span>@else<span class="btn-n" data-adjuntos-n hidden>0</span>@endif
+            </button>
+        @endif
         {{-- Envío manual a Softland: Modificar y Enviar (solo si aún no se envió ni se está enviando). --}}
         @if ($pendiente)
             <form method="POST" action="{{ route('pedidos.editar', $pedido) }}">
@@ -29,6 +37,65 @@
             </form>
         @endif
     </x-slot:actions>
+
+    @if ($pedido->enviadoASoftland())
+        @php $cfgAdj = config('cotizacion.adjuntos'); @endphp
+        {{-- Documentos del pedido: se suben al bucket (carpeta Cotizaciones/<N.º de pedido>). --}}
+        <dialog class="dlg dlg-adjuntos" data-adjuntos-dlg aria-labelledby="dlg-adjuntos-t"
+                data-listar="{{ route('pedidos.adjuntos', $pedido) }}" data-subir="{{ route('pedidos.adjuntos.subir', $pedido) }}"
+                data-max-kb="{{ $cfgAdj['max_kb'] }}" data-extensiones="{{ implode(',', $cfgAdj['extensiones']) }}">
+            <div class="dlg-form">
+                <div class="adj-head">
+                    <div>
+                        <h2 id="dlg-adjuntos-t" class="dlg-title">Adjuntos del pedido {{ $pedido->numero() }}</h2>
+                        <p class="dlg-sub">{{ $pedido->cliente }}</p>
+                    </div>
+                    <button type="button" class="icon-btn adj-cerrar" data-adjuntos-cerrar aria-label="Cerrar">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                {{-- Zona para soltar archivos (o hacer clic para elegirlos). --}}
+                <label class="adj-drop" data-adjuntos-drop>
+                    <input type="file" multiple data-adjuntos-input accept="{{ collect($cfgAdj['extensiones'])->map(fn ($e) => '.'.$e)->implode(',') }}" class="sr-only">
+                    <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M20 16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3"/></svg>
+                    <strong>Arrastra los archivos aquí</strong>
+                    <span>o <u>haz clic para elegirlos</u> · PDF, imágenes, Word, Excel, ZIP… hasta {{ round($cfgAdj['max_kb'] / 1024) }} MB c/u</span>
+                </label>
+                <div class="adj-progreso" data-adjuntos-progreso hidden>
+                    <div class="adj-barra"><span data-adjuntos-barra></span></div>
+                    <small data-adjuntos-estado>Subiendo…</small>
+                </div>
+
+                {{-- Archivos adjuntados: buscar, ordenar por columna y descargar / eliminar. --}}
+                <div class="adj-lista">
+                    <div class="toolbar adj-toolbar">
+                        <span class="adj-total"><b data-adjuntos-total>0</b> archivo(s)</span>
+                        <label class="search-box">
+                            <span class="sr-only">Buscar adjunto</span>
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                            <input type="search" placeholder="Buscar archivo…" data-adjuntos-buscar autocomplete="off">
+                        </label>
+                    </div>
+                    <div class="tbl-box">
+                        <table class="tbl adj-tbl" data-orden-local>
+                            <thead>
+                                <tr>
+                                    <x-th-orden campo="nombre">Archivo</x-th-orden>
+                                    <x-th-orden campo="tipo">Tipo</x-th-orden>
+                                    <x-th-orden campo="tamano" class="th-num">Tamaño</x-th-orden>
+                                    <x-th-orden campo="fecha">Fecha</x-th-orden>
+                                    <th><span class="sr-only">Acciones</span></th>
+                                </tr>
+                            </thead>
+                            <tbody data-adjuntos-filas></tbody>
+                        </table>
+                    </div>
+                    <p class="empty adj-vacio" data-adjuntos-vacio>Aún no hay documentos adjuntos.</p>
+                </div>
+            </div>
+        </dialog>
+    @endif
 
     <dialog id="dlg-cotizacion" class="dlg" aria-labelledby="dlg-cotizacion-t">
         <form method="POST" action="{{ route('pedidos.cotizacion', $pedido) }}" class="dlg-form"

@@ -109,7 +109,7 @@ class PedidoController extends Controller
         }
 
         return view('pedidos.show', [
-            'pedido' => $pedido->load('items'),
+            'pedido' => $pedido->load('items')->loadCount('adjuntos'),
             'cliente' => $cliente,
             'numeroTentativo' => $numeroTentativo,
             // Datos del cliente para el diálogo de la cotización en Excel (recordados por cliente).

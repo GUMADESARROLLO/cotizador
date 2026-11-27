@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdjuntoController;
 use App\Http\Controllers\ArticuloController;
 use App\Http\Controllers\CarritoController;
 use App\Http\Controllers\ClienteController;
@@ -54,3 +55,8 @@ Route::post('/pedidos/{pedido}/cotizacion', [CotizacionController::class, 'desca
 Route::post('/pedido/cancelar-edicion', [PedidoController::class, 'cancelarEdicion'])->name('pedidos.cancelar-edicion');
 // Envío manual a Softland (con confirmación SweetAlert2 en la pantalla).
 Route::post('/pedidos/{pedido}/softland', [SoftlandController::class, 'enviar'])->name('pedidos.softland');
+// Documentos adjuntos (solo pedidos ya ingresados en Softland): bucket, carpeta Cotizaciones/.
+Route::get('/pedidos/{pedido}/adjuntos', [AdjuntoController::class, 'index'])->name('pedidos.adjuntos');
+Route::post('/pedidos/{pedido}/adjuntos', [AdjuntoController::class, 'store'])->name('pedidos.adjuntos.subir');
+Route::get('/pedidos/{pedido}/adjuntos/{adjunto}', [AdjuntoController::class, 'descargar'])->name('pedidos.adjuntos.descargar');
+Route::delete('/pedidos/{pedido}/adjuntos/{adjunto}', [AdjuntoController::class, 'destroy'])->name('pedidos.adjuntos.eliminar');
