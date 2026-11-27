@@ -13,6 +13,7 @@ use App\Catalogo\SqlServerLotes;
 use App\Clientes\Clientes;
 use App\Clientes\DemoClientes;
 use App\Clientes\SqlServerClientes;
+use App\Cotizaciones\CotizacionExcel;
 use App\Softland\ConsecutivoPedido;
 use App\Softland\EnviarPedidoSoftland;
 use App\Softland\PedidoSoftland;
@@ -101,6 +102,12 @@ class AppServiceProvider extends ServiceProvider
             config: config('articulos.imagenes'),
             carpeta: public_path('thumbs'),
             urlBase: '/thumbs',
+        ));
+
+        $this->app->bind(CotizacionExcel::class, fn () => new CotizacionExcel(
+            plantilla: config('cotizacion.plantilla'),
+            firma: config('cotizacion.firma') ?: 'Lic. '.config('clientes.vendedor_nombre'),
+            tiempoEntrega: config('cotizacion.tiempo_entrega'),
         ));
 
         // scoped: memoriza el mapa solo durante la petición.

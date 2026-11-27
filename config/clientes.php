@@ -38,6 +38,8 @@ return [
         'moneda' => 'MONEDA',               // COR / DOL: moneda del crédito
         'telefono1' => 'TELEFONO1',
         'telefono2' => 'TELEFONO2',
+        'contacto' => 'CONTACTO', // "Atención" de la cotización si el pedido no trae contacto
+        'fax' => 'FAX',
     ],
 
     // Columnas extra donde también se busca (alias "c").

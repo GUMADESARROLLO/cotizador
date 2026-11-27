@@ -3,6 +3,7 @@
 use App\Http\Controllers\ArticuloController;
 use App\Http\Controllers\CarritoController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\ImagenController;
 use App\Http\Controllers\PedidoController;
 use App\Http\Controllers\SoftlandController;
@@ -48,6 +49,8 @@ Route::get('/pedidos', [PedidoController::class, 'index'])->name('pedidos.index'
 Route::get('/pedidos/{pedido}', [PedidoController::class, 'show'])->name('pedidos.show');
 // Modificar un pedido guardado (solo si no se envió a Softland).
 Route::post('/pedidos/{pedido}/editar', [PedidoController::class, 'editar'])->name('pedidos.editar');
+// Cotización en Excel sobre la plantilla oficial (pide el N.º de licitación).
+Route::post('/pedidos/{pedido}/cotizacion', [CotizacionController::class, 'descargar'])->name('pedidos.cotizacion');
 Route::post('/pedido/cancelar-edicion', [PedidoController::class, 'cancelarEdicion'])->name('pedidos.cancelar-edicion');
 // Envío manual a Softland (con confirmación SweetAlert2 en la pantalla).
 Route::post('/pedidos/{pedido}/softland', [SoftlandController::class, 'enviar'])->name('pedidos.softland');

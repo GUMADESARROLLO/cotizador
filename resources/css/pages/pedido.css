@@ -448,3 +448,68 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Diálogo "Cotización en Excel" (detalle del pedido) */
+@layer components {
+    .dlg {
+        /* Centrado: el reset de Tailwind quita el margin:auto nativo de <dialog>. */
+        position: fixed;
+        inset: 0;
+        height: fit-content;
+        margin: auto;
+        width: min(440px, calc(100% - 32px));
+        padding: 0;
+        border: 1px solid var(--color-line);
+        border-radius: 14px;
+        background: var(--color-paper);
+        color: var(--color-ink);
+        box-shadow: 0 24px 60px -20px rgb(21 32 79 / 0.45);
+    }
+    .dlg::backdrop {
+        background: rgb(21 32 79 / 0.4);
+    }
+    .dlg-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 22px;
+    }
+    .dlg-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .dlg-sub {
+        margin: -8px 0 0;
+        color: var(--color-ink-soft);
+        font-size: 13px;
+    }
+    .dlg-campo {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .dlg-campo input {
+        height: 40px;
+        padding: 0 12px;
+        border: 1px solid #d3dbe8;
+        border-radius: 10px;
+        font: 500 15px var(--font-sans);
+        outline: none;
+    }
+    .dlg-campo input:focus {
+        border-color: var(--color-royal);
+        box-shadow: 0 0 0 3px rgb(43 59 158 / 0.14);
+    }
+    .dlg-campo small {
+        color: var(--color-ink-soft);
+        font-weight: 400;
+    }
+    .dlg-acciones {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+}

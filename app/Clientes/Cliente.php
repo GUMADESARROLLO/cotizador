@@ -21,6 +21,9 @@ final readonly class Cliente
         public string $moneda = 'L',      // moneda del crédito/saldo del cliente
         public string $telefono1 = '',
         public string $telefono2 = '',
+        // Para la cotización en Excel ("Atención" y "Fax").
+        public string $contacto = '',
+        public string $fax = '',
     ) {}
 
     /**
@@ -55,6 +58,8 @@ final readonly class Cliente
             moneda: in_array(strtoupper(trim((string) ($row->moneda ?? ''))), ['DOL', 'D', 'USD'], true) ? 'D' : 'L',
             telefono1: trim((string) ($row->telefono1 ?? '')),
             telefono2: trim((string) ($row->telefono2 ?? '')),
+            contacto: trim((string) ($row->contacto ?? '')),
+            fax: trim((string) ($row->fax ?? '')),
         );
     }
 

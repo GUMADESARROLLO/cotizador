@@ -18,7 +18,7 @@ class SqlServerClientesTest extends TestCase
         parent::setUp();
 
         Schema::create('cliente', function ($t) {
-            foreach (['CLIENTE', 'NOMBRE', 'ALIAS', 'DIRECCION', 'VENDEDOR', 'ACTIVO', 'MOROSO', 'TELEFONO1', 'TELEFONO2'] as $c) {
+            foreach (['CLIENTE', 'NOMBRE', 'ALIAS', 'DIRECCION', 'VENDEDOR', 'ACTIVO', 'MOROSO', 'TELEFONO1', 'TELEFONO2', 'CONTACTO', 'FAX'] as $c) {
                 $t->string($c)->nullable();
             }
             $t->string('CONDICION_PAGO')->default('180');
@@ -164,10 +164,11 @@ class SqlServerClientesTest extends TestCase
 
     public function test_lee_telefonos(): void
     {
-        DB::table('cliente')->where('CLIENTE', '00004')->update(['TELEFONO1' => '2222-1111', 'TELEFONO2' => '8888-0000']);
+        DB::table('cliente')->where('CLIENTE', '00004')->update(['TELEFONO1' => '2222-1111', 'TELEFONO2' => '8888-0000', 'CONTACTO' => ' LIC. ANA PEREZ ', 'FAX' => '2222-1112']);
 
         $c = $this->clientes()->encontrar('00004');
         $this->assertSame(['2222-1111', '8888-0000'], [$c->telefono1, $c->telefono2]);
+        $this->assertSame(['LIC. ANA PEREZ', '2222-1112'], [$c->contacto, $c->fax]); // para la cotización
         $this->assertSame('', $this->clientes()->encontrar('00011')->telefono1);
     }
 }

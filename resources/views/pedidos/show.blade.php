@@ -7,7 +7,11 @@
 <x-layouts.app :title="'Pedido '.($pedido->softland_pedido ? $pedido->numero() : 'sin enviar')" :sub="$pedido->cliente" section="historial">
     <x-slot:actions>
         <a href="{{ route('pedidos.index') }}" class="btn btn-line">Historial</a>
-        <button type="button" onclick="window.print()" class="btn btn-line">Imprimir</button>
+        {{-- Cotización en Excel (plantilla oficial): pide el N.º de licitación antes de descargar. --}}
+        <button type="button" class="btn btn-line" onclick="document.getElementById('dlg-cotizacion').showModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m8 13 4 5M12 13l-4 5"/></svg>
+            Cotización Excel
+        </button>
         {{-- Envío manual a Softland: Modificar y Enviar (solo si aún no se envió ni se está enviando). --}}
         @if ($pendiente)
             <form method="POST" action="{{ route('pedidos.editar', $pedido) }}">
@@ -26,6 +30,25 @@
             </form>
         @endif
     </x-slot:actions>
+
+    <dialog id="dlg-cotizacion" class="dlg" aria-labelledby="dlg-cotizacion-t">
+        <form method="POST" action="{{ route('pedidos.cotizacion', $pedido) }}" class="dlg-form"
+              onsubmit="setTimeout(() => this.closest('dialog').close(), 50)">
+            @csrf
+            <h2 id="dlg-cotizacion-t" class="dlg-title">Cotización en Excel</h2>
+            <p class="dlg-sub">Se genera sobre la plantilla oficial con los datos de este pedido.</p>
+            <label class="dlg-campo">
+                <span>N.º de licitación</span>
+                <input type="text" name="licitacion" value="{{ $pedido->licitacion }}" maxlength="60" autocomplete="off"
+                       placeholder="Ej. CA-158-10-2026" autofocus>
+                <small>El que comparte el cliente. Puede quedar vacío.</small>
+            </label>
+            <div class="dlg-acciones">
+                <button type="button" class="btn btn-line" onclick="this.closest('dialog').close()">Cancelar</button>
+                <button class="btn btn-solid">Descargar Excel</button>
+            </div>
+        </form>
+    </dialog>
 
     @if (session('creado'))
         <div class="ped-flash no-print">{!! $check !!} Pedido confirmado</div>
